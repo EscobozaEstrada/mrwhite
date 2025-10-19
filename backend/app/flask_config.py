@@ -36,10 +36,15 @@ class Config:
     MAIL_USE_TLS = True    
     MAIL_USERNAME = os.getenv('SES_SMTP_USERNAME')
     MAIL_PASSWORD = os.getenv('SES_SMTP_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.getenv('SES_EMAIL_FROM', 'noreply@mrwhite.com')
+    # MAIL_DEFAULT_SENDER = os.getenv('SES_EMAIL_FROM', 'mrwhitetheai@gmail.com')
+    MAIL_DEFAULT_SENDER = "no-reply@mrwhiteaidogbuddy.com"
+
+    # Email Configuration
+    # ADMIN_EMAIL = os.getenv('SES_EMAIL_FROM', 'mrwhitetheai@gmail.com')
+    ADMIN_EMAIL = "mrwhitetheai@gmail.com"
 
     # CORS Configuration
-    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+    FRONTEND_URL = os.getenv('FRONTEND_URL')
     CORS_MAX_AGE = int(os.getenv('CORS_MAX_AGE', '3600'))
 
     # JWT Configuration
@@ -91,7 +96,7 @@ class Config:
     DEFAULT_CONTEXT = os.getenv('DEFAULT_CONTEXT', 'chat')
 
     # Email Configuration
-    ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'medeveloper2025@gmail.com')
+    ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'mrwhitetheai@gmail.com')
 
     # Stripe Configuration
     STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')

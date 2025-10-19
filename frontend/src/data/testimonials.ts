@@ -6,7 +6,7 @@ export const testimonials: Testimonial[] = [
     location: "Auburn",
     rating: 5,
     text: "Meeting Anahata Graceland and Arturo was a great experience; full of loving, expert advice and attention to our needs.",
-    image: "/assets/home-profile.png"
+    image: "/assets/home-profile.webp"
   },
   {
     name: "Michael R",
@@ -20,7 +20,7 @@ export const testimonials: Testimonial[] = [
     location: "Portland",
     rating: 5,
     text: "The BlockchainDNA NFT gives me peace of mind knowing my dog's records are secure. The community is so supportive too!",
-    image: "/assets/home-profile.png"
+    image: "/assets/home-profile.webp"
   },
   {
     name: "James L",
@@ -29,4 +29,4 @@ export const testimonials: Testimonial[] = [
     text: "As a veterinarian, I recommend Mr. White to all my clients. The health tracking features help them stay on top of their pet's care.",
     image: "/assets/john-doe.png"
   }
-]; 
+];

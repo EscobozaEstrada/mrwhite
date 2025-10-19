@@ -10,9 +10,11 @@ import { motion } from "framer-motion"
 import { useRef } from "react"
 import { FaDiscord, FaHome, FaInfo, FaTelegramPlane } from "react-icons/fa"
 import { FaCircleInfo, FaCoins } from "react-icons/fa6"
+import { useRouter } from "next/navigation"
 
 export default function Footer() {
   const footerRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -60,7 +62,7 @@ export default function Footer() {
         viewport={{ once: true, amount: 0.3 }}
       >
         <motion.div className="w-full max-w-[224px] flex flex-col gap-[10px]" variants={itemVariants}>
-          <div className="flex items-center gap-[10px]">
+          <div className="flex items-center gap-[10px] cursor-pointer" onClick={() => router.push('/')}>
             <div className="w-[40px] h-[40px] sm:w-[47px] sm:h-[47px] relative">
               <ImagePop
                 src="/assets/logo.png"
@@ -71,7 +73,7 @@ export default function Footer() {
             </div>
             <div>
               <h1 className="text-[18px] sm:text-[21px]/6 font-semibold font-work-sans tracking-tighter text-[var(--mrwhite-primary-color)]">Mr. White</h1>
-              <p className="text-[10px] sm:text-[11px] font-light font-public-sans tracking-tight text-white/80">Guide to all paws</p>
+              <p className="text-[10px] sm:text-[11px] font-light font-public-sans tracking-tight text-white/80">AI Assistant for Dog Care & Beyond</p>
             </div>
           </div>
           <p className="text-[14px] font-public-sans font-light tracking-tighter">Your trusted companion for all dog-related advice, training tips, and pet care resources.</p>
@@ -150,7 +152,7 @@ export default function Footer() {
       </motion.div>
       
       <div className=" bg-white/10"> 
-      <div className="min-h-[41px] py-2  flex max-sm:flex-col max-sm:gap-2 max-sm:items-center justify-between items-center px-4 sm:px-8 md:px-12 text-white/80 max-w-[1440px] mx-auto">
+      <div className="min-h-[41px] py-2 flex max-sm:gap-2 max-sm:items-center justify-between items-center px-4 sm:px-8 md:px-12 text-white/80 max-w-[1440px] mx-auto">
         <p className="text-[12px] sm:text-[14px] font-public-sans font-light">All rights reserved ©</p>
         <div className="text-[12px] sm:text-[14px] font-public-sans font-light max-sm:flex max-sm:flex-col max-sm:items-center max-sm:gap-1">
           <Link href="/">Terms of Service</Link>

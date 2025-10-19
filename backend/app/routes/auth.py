@@ -21,12 +21,13 @@ def handle_auth_options(path):
 def signup():
     data = request.json
     
-    # Use AuthService to create user
+    # Use AuthService to create user with timezone
     success, message, user_data = AuthService.create_user(
         username=data.get('username', ''),
         email=data.get('email', ''),
         password=data.get('password', ''),
-        confirm_password=data.get('confirm_password', '')
+        confirm_password=data.get('confirm_password', ''),
+        timezone=data.get('timezone', 'UTC')  # 🌍 Accept timezone from frontend
     )
     
     if not success:
@@ -369,7 +370,7 @@ def test_fcm_notification():
                 'test': 'true',
                 'timestamp': datetime.utcnow().isoformat()
             },
-            click_action=f"{current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/reminders"
+            click_action=f"{current_app.config.get('FRONTEND_URL')}/reminders"
         )
         
         return jsonify({
@@ -418,17 +419,120 @@ def delete_account():
             
             HealthReminder.query.filter_by(user_id=user.id).delete()
             
-            # Delete user's conversations and messages
-            conversations = Conversation.query.filter_by(user_id=user.id).all()
-            for conversation in conversations:
-                Message.query.filter_by(conversation_id=conversation.id).delete()
+            # Delete additional health-related data
+            from app.models.health_models import PetProfile, HealthInsight, HealthRecord
+            PetProfile.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            HealthInsight.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            HealthRecord.query.filter_by(user_id=user.id).delete(synchronize_session=False)
             
-            Conversation.query.filter_by(user_id=user.id).delete()
+            # Delete user's conversations and messages (with proper cascade handling)
+            from app.models.message import Attachment
+            
+            # First, get all conversation IDs for the user
+            conversations = Conversation.query.filter_by(user_id=user.id).all()
+            conversation_ids = [conv.id for conv in conversations]
+            
+            if conversation_ids:
+                # Get all message IDs for these conversations
+                messages = Message.query.filter(Message.conversation_id.in_(conversation_ids)).all()
+                message_ids = [msg.id for msg in messages]
+                
+                if message_ids:
+                    # Delete attachments first (foreign key constraint)
+                    Attachment.query.filter(Attachment.message_id.in_(message_ids)).delete(synchronize_session=False)
+                
+                # Then delete messages
+                Message.query.filter(Message.conversation_id.in_(conversation_ids)).delete(synchronize_session=False)
+            
+            # Finally delete conversations
+            Conversation.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            
+            # Delete user's credit transactions
+            from app.models.credit_transaction import CreditTransaction
+            CreditTransaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            
+            # Delete user's books and book-related data
+            from app.models.enhanced_book import EnhancedBook, EnhancedBookChapter, MessageCategory
+            from app.models.user_book import UserBookCopy
+            from app.models.custom_book import CustomBook, BookChapter
+            from app.models.care_record import CareRecord, Document, KnowledgeBase
+            from app.models.image import UserImage
+            from app.models.folder import ImageFolder
+            
+            # First, delete chapters and related data for user's books (foreign key constraints)
+            user_custom_books = CustomBook.query.filter_by(user_id=user.id).all()
+            user_custom_book_ids = [book.id for book in user_custom_books]
+            if user_custom_book_ids:
+                BookChapter.query.filter(BookChapter.book_id.in_(user_custom_book_ids)).delete(synchronize_session=False)
+            
+            user_enhanced_books = EnhancedBook.query.filter_by(user_id=user.id).all()
+            user_enhanced_book_ids = [book.id for book in user_enhanced_books]
+            if user_enhanced_book_ids:
+                EnhancedBookChapter.query.filter(EnhancedBookChapter.book_id.in_(user_enhanced_book_ids)).delete(synchronize_session=False)
+                MessageCategory.query.filter(MessageCategory.book_id.in_(user_enhanced_book_ids)).delete(synchronize_session=False)
+            
+            EnhancedBook.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            UserBookCopy.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            CustomBook.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            CareRecord.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            Document.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            KnowledgeBase.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            # Handle folders that reference user images (cover_image_id constraint)
+            # First, clear cover_image_id references, then delete folders and images
+            db.session.execute(
+                db.text("UPDATE folders SET cover_image_id = NULL WHERE user_id = :user_id"),
+                {"user_id": user.id}
+            )
+            # Delete from both possible folder tables (model discrepancy)
+            db.session.execute(
+                db.text("DELETE FROM folders WHERE user_id = :user_id"),
+                {"user_id": user.id}
+            )
+            
+            UserImage.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+            ImageFolder.query.filter_by(user_id=user.id).delete(synchronize_session=False)
             
             # Delete user's subscription data
             if hasattr(user, 'stripe_customer_id') and user.stripe_customer_id:
                 # Optionally cancel Stripe subscriptions here
                 pass
+            
+            # DELETE INTELLIGENT CHAT DATA (ic_* tables, Pinecone, S3)
+            try:
+                import asyncio
+                import sys
+                import os
+                
+                # Add intelligent_chat to path
+                intelligent_chat_path = os.path.join(os.path.dirname(__file__), '../../intelligent_chat')
+                if intelligent_chat_path not in sys.path:
+                    sys.path.insert(0, intelligent_chat_path)
+                
+                from services.account_deletion_service import AccountDeletionService
+                from models.base import get_db_async
+                
+                # Create async session and run deletion
+                async def delete_ic_data():
+                    async for db_session in get_db_async():
+                        deletion_service = AccountDeletionService()
+                        stats = await deletion_service.delete_user_data_complete(
+                            db=db_session,
+                            user_id=user.id
+                        )
+                        current_app.logger.info(f"✅ Intelligent Chat data deleted: {stats}")
+                        return stats
+                
+                # Run async deletion
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                ic_stats = loop.run_until_complete(delete_ic_data())
+                loop.close()
+                
+                current_app.logger.info(f"✅ Intelligent Chat cleanup completed for user {user.id}: {ic_stats}")
+                
+            except Exception as ic_error:
+                current_app.logger.error(f"⚠️ Intelligent Chat cleanup failed (continuing...): {str(ic_error)}")
+                # Don't fail the entire deletion if IC cleanup fails
             
             # Finally, delete the user
             db.session.delete(user)
@@ -449,5 +553,53 @@ def delete_account():
     except Exception as e:
         current_app.logger.error(f"Account deletion error: {str(e)}")
         return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+# 🌍 GLOBAL TIMEZONE: Update user timezone endpoint
+@auth_bp.route('/update-timezone', methods=['POST'])
+def update_timezone():
+    """Update user's timezone setting"""
+    try:
+        data = request.json
+        timezone = data.get('timezone', 'UTC')
+        
+        # Validate timezone
+        try:
+            import pytz
+            pytz.timezone(timezone)
+        except:
+            return jsonify({'message': 'Invalid timezone format'}), 400
+        
+        # Get user from cookie
+        token = request.cookies.get('token')
+        if not token:
+            return jsonify({'message': 'Not authenticated'}), 401
+        
+        from app.utils.jwt import decode_token
+        token_payload = decode_token(token)
+        if not token_payload:
+            return jsonify({'message': 'Invalid token'}), 401
+        
+        user_id = token_payload.get('id')
+        if not user_id:
+            return jsonify({'message': 'Invalid token payload'}), 401
+        
+        from app.models.user import User
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Update timezone
+        user.timezone = timezone
+        from app import db
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Timezone updated successfully',
+            'timezone': timezone
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating timezone: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 

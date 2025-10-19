@@ -9,18 +9,32 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_DESCRIPTION: process.env.NEXT_PUBLIC_APP_DESCRIPTION,
     NEXT_PUBLIC_DEFAULT_CONVERSATION_TITLE: process.env.NEXT_PUBLIC_DEFAULT_CONVERSATION_TITLE,
   },
+  experimental: {
+    // @ts-expect-error - allowedDevOrigins not yet in type definitions
+    allowedDevOrigins: [
+      process.env.FRONTEND_URL || 'http://3.85.132.24',
+      'http://3.85.132.24',
+      'http://3.85.132.24:5001',
+      'http://localhost:5001',
+      'http://3.85.132.24:3000',
+    ],
+  },
   images: {
-    domains: ['localhost', 'master-white-project.s3.us-east-1.amazonaws.com'],
     remotePatterns: [
       {
         protocol: 'http',
-        hostname: 'localhost',
+        hostname: '34.228.255.83',
         port: '5001',
         pathname: '/uploads/**',
       },
       {
         protocol: 'https',
         hostname: 'master-white-project.s3.us-east-1.amazonaws.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.amazonaws.com',
         pathname: '/**',
       },
     ],

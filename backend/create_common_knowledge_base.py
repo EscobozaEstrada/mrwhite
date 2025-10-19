@@ -337,8 +337,9 @@ class CommonKnowledgeBaseCreator:
 
 def main():
     """Main execution function"""
-    # PDF file path
-    pdf_path = "/Users/aayushsaini/Downloads/Mr-White-Project/backend/The Way of the Dog Anahata 2025-5-13.docx.pdf"
+    # PDF file path - use the current system path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    pdf_path = os.path.join(current_dir, "The Way of the Dog Anahata 2025-5-13.docx (1).pdf")
     
     # Check if file exists
     if not os.path.exists(pdf_path):

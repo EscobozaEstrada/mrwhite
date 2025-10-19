@@ -2,10 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Upload, File, Image, X, CheckCircle, AlertCircle, Eye } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Upload, File, Image, X, CheckCircle, AlertCircle, Eye, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import toast from '@/components/ui/sound-toast';
 
 interface FileUploadModalProps {
     isOpen: boolean;
@@ -18,6 +19,7 @@ interface FileUploadModalProps {
     acceptedTypes?: string[];
     uploadEndpoint?: string;
     showPreview?: boolean;
+    mode?: 'images' | 'documents' | 'both';
 }
 
 interface FileWithPreview extends File {

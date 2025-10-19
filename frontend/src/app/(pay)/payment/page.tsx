@@ -30,13 +30,13 @@ const PaymentPage = () => {
 
     // Safely parse the amount parameter with validation
     const amount = (() => {
-        if (!amountParam) return 28.95; // Default amount
+        if (!amountParam) return 19.95; // Default amount
 
         const parsed = parseFloat(amountParam);
 
         // Validate the amount is a positive number
         if (isNaN(parsed) || parsed <= 0) {
-            return 28.95; // Default to 28.95 if invalid
+            return 19.95; // Default to 19.95 if invalid
         }
 
         return parsed;

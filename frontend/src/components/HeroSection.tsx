@@ -36,4 +36,4 @@ const HeroSection = ({ title, subtitle, images, height = "h-[250px] md:h-[400px]
   );
 };
 
-export default HeroSection; 
+export default HeroSection;

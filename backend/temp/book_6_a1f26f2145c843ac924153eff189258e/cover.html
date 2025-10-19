@@ -1,0 +1,61 @@
+
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Cover - RadheShyam</title>
+                <style>
+                    @page {
+                        size: A4;
+                        margin: 0;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        height: 100vh;
+                        width: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                        text-align: center;
+                        position: relative;
+                        font-family: 'Arial', sans-serif;
+                    }
+                    .cover-image {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        opacity: 0.4;
+                        z-index: 0;
+                    }
+                    .cover-content {
+                        position: relative;
+                        z-index: 1;
+                        padding: 2em;
+                        background-color: rgba(255, 255, 255, 0.7);
+                        border-radius: 10px;
+                        max-width: 80%;
+                    }
+                    h1 {
+                        font-size: 36pt;
+                        margin-bottom: 20px;
+                    }
+                    .author {
+                        font-size: 18pt;
+                        margin-bottom: 50px;
+                    }
+                </style>
+            </head>
+            <body>
+                <img src="/home/node/Mr-White-Project/backend/app/../temp/book_6_a1f26f2145c843ac924153eff189258e/upload_dc3aa9c0-2f93-453d-8f2b-883a65c6165c.jpg" class="cover-image" alt="Cover Image">
+                <div class="cover-content">
+                    <h1>RadheShyam</h1>
+                    <div class="author">By testing180</div>
+                </div>
+            </body>
+            </html>
+            

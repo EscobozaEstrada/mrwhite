@@ -1,12 +1,13 @@
 'use client'
 
-import { FiFile, FiImage, FiX } from 'react-icons/fi'
+import { FiFile, FiImage, FiX, FiMusic } from 'react-icons/fi'
 import Image from 'next/image'
 
 interface SelectedFile {
     file: File;
-    type: 'file' | 'image';
+    type: 'file' | 'image' | 'audio';
     previewUrl?: string;
+    description?: string;
 }
 
 interface SelectedFilesProps {
@@ -30,6 +31,8 @@ export default function SelectedFiles({
                                 fill
                                 className="object-cover rounded-sm"
                             />
+                        ) : file.type === 'audio' ? (
+                            <FiMusic className="w-6 h-6 text-blue-400" />
                         ) : (
                             <FiFile className="w-6 h-6 text-neutral-400" />
                         )}

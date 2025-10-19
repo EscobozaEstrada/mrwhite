@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Lock, Eye, EyeOff, Zap, CreditCard, Loader2, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'motion/react';
+import toast from '@/components/ui/sound-toast';
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
@@ -20,6 +21,8 @@ const fadeInUp = {
 const LoginPage = () => {
   const { user, setUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const toastShownRef = useRef(false);
 
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -30,10 +33,25 @@ const LoginPage = () => {
   });
 
   useEffect(() => {
-    if (user) {
-      router.push('/');
+    // Check for redirect parameter and show appropriate message
+    const redirectPath = searchParams.get('redirect');
+    if (redirectPath && !toastShownRef.current) {
+      toastShownRef.current = true;
+      toast.error("Please login to access this page");
     }
-  }, [user, router]);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (user) {
+      // If there's a redirect parameter, use it
+      const redirectPath = searchParams.get('redirect');
+      if (redirectPath) {
+        router.push(redirectPath);
+      } else {
+        router.push('/');
+      }
+    }
+  }, [user, router, searchParams]);
 
   const handleLoginSubmit = async () => {
     if (!loginForm.username || !loginForm.password) {
@@ -50,6 +68,14 @@ const LoginPage = () => {
         { username: loginForm.username, password: loginForm.password },
         { withCredentials: true }
       );
+
+      // Extract token from cookie and store in localStorage for cross-port access
+      const tokenCookie = document.cookie.split('; ').find(row => row.startsWith('token='));
+      if (tokenCookie) {
+        const token = tokenCookie.split('=')[1];
+        localStorage.setItem('token', token);
+        console.log('✅ Token stored in localStorage for cross-port access');
+      }
 
       if (loginResponse.data.user) {
         setUser(loginResponse.data.user);
@@ -98,7 +124,13 @@ const LoginPage = () => {
   };
 
   const handleGoBack = () => {
-    router.back();
+    // Check if there's a redirect parameter, if so go to home instead of back
+    const redirectPath = searchParams.get('redirect');
+    if (redirectPath) {
+      router.push('/');
+    } else {
+      router.back();
+    }
   };
 
   if (user) return null;
@@ -109,6 +141,7 @@ const LoginPage = () => {
 
       {/* Back Button */}
       <motion.button
+        layout
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -120,12 +153,14 @@ const LoginPage = () => {
       </motion.button>
 
       <motion.div
+        layout
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.6 }}
         className="w-full max-w-md relative z-10"
       >
         <motion.div
+          layout
           className="bg-black rounded-lg p-8 shadow-2xl flex flex-col items-center"
           initial="hidden"
           animate="visible"
@@ -135,19 +170,22 @@ const LoginPage = () => {
           }}
         >
           {/* Header */}
-          <motion.div className="text-center mb-8 flex gap-4" variants={fadeInUp} custom={0}>
-            <motion.div className="flex justify-center mb-4" variants={fadeInUp} custom={1}>
-              <Image src="/assets/logo.png" alt="Dog" width={60} height={60} />
+          <motion.div layout className="text-center mb-8 flex flex-col sm:flex-row items-center gap-4" variants={fadeInUp} custom={0}>
+            <motion.div layout className="flex justify-center" variants={fadeInUp} custom={1}>
+              <div className="relative w-16 h-16 flex-shrink-0">
+                <Image src="/assets/logo.png" alt="Dog" fill className="object-contain" />
+              </div>
             </motion.div>
-            <motion.div className="flex flex-col justify-center mb-4" variants={fadeInUp} custom={2}>
+            <motion.div layout className="flex flex-col font-work-sans justify-center text-center sm:text-left" variants={fadeInUp} custom={2}>
               <h1 className="text-2xl font-bold text-[var(--mrwhite-primary-color)]">Mr. White</h1>
-              <p className="text-gray-400 text-sm">Guide to All Paws</p>
+              <p className="text-gray-400 text-sm ">AI Assistant for Dog Care & Beyond</p>
             </motion.div>
           </motion.div>
 
           {/* Login Form */}
           <motion.div
-            className="space-y-4 w-full"
+            layout
+            className="space-y-4 w-full font-work-sans"
             onKeyDown={handleKeyDown}
             initial="hidden"
             animate="visible"
@@ -157,7 +195,7 @@ const LoginPage = () => {
             }}
           >
             {[0, 1].map((i) => (
-              <motion.div key={i} className="relative" variants={fadeInUp} custom={i + 3}>
+              <motion.div layout key={i} className="relative" variants={fadeInUp} custom={i + 3}>
                 {i === 0 ? (
                   <>
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -202,24 +240,25 @@ const LoginPage = () => {
               </p>
             )}
 
-            <motion.div className="flex justify-between text-sm" variants={fadeInUp} custom={6}>
+            <motion.div layout className="flex justify-between text-sm" variants={fadeInUp} custom={6}>
               <button
                 type="button"
                 onClick={() => router.push('/signup')}
-                className="text-[var(--mrwhite-primary-color)] underline cursor-pointer"
+                className="text-[var(--mrwhite-primary-color)] hover:underline cursor-pointer"
               >
                 Sign-up
               </button>
               <button
                 type="button"
                 onClick={() => router.push('/forgot-password')}
-                className="text-[var(--mrwhite-primary-color)] underline cursor-pointer"
+                className="text-[var(--mrwhite-primary-color)] hover:underline cursor-pointer"
               >
                 Lost your password?
               </button>
             </motion.div>
 
             <motion.button
+              layout
               onClick={handleLoginSubmit}
               disabled={isLoading}
               whileHover={{ scale: 1.02 }}
@@ -230,13 +269,13 @@ const LoginPage = () => {
             >
               {isLoading ? (
                 // <Loader2 className="w-5 h-5 animate-spin" />
-                <div className="relative w-12 h-6">
+                <div className="relative w-12 h-6 flex-shrink-0">
                   <Image 
                     src="/assets/running-dog.gif" 
                     alt="Loading" 
                     fill
                     priority
-                    className="object-cover"
+                    className="object-contain"
                   />
                 </div>
               ) : (
@@ -246,6 +285,7 @@ const LoginPage = () => {
             </motion.button>
 
             <motion.button
+              layout
               type="button"
               disabled={isLoading}
               whileHover={{ scale: 1.02 }}

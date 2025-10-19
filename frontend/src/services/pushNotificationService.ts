@@ -16,26 +16,54 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
+console.log('firebaseConfig =============>', firebaseConfig);
+
 // Validate configuration
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
     console.error('Firebase configuration is missing. Please check your environment variables.');
 }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase - with error handling
+let app: any = null;
+let firebaseInitialized = false;
+
+try {
+    // Only initialize if we have valid config and browser support
+    if (firebaseConfig.apiKey && firebaseConfig.projectId && typeof window !== 'undefined') {
+        app = initializeApp(firebaseConfig);
+        firebaseInitialized = true;
+        console.log('✅ Firebase app initialized successfully');
+    } else {
+        console.warn('⚠️ Firebase not initialized - missing config or not in browser environment');
+    }
+} catch (error) {
+    console.error('❌ Firebase initialization failed:', error);
+    firebaseInitialized = false;
+}
 
 export class PushNotificationService {
     private static instance: PushNotificationService;
-    private messaging: any;
+    private messaging: any = null;
     private currentToken: string | null = null; // Store current token
     private isRegistering: boolean = false; // Prevent multiple registration attempts
     private registrationRetries: number = 0;
     private maxRetries: number = 3;
 
     private constructor() {
-        // Initialize Firebase Messaging
-        this.messaging = getMessaging(app);
-        this.initializeMessaging();
+        // Only initialize messaging if Firebase is available and browser supports it
+        if (firebaseInitialized && app && this.isSupported()) {
+            try {
+                this.messaging = getMessaging(app);
+                this.initializeMessaging();
+                console.log('✅ Firebase Messaging initialized successfully');
+            } catch (error) {
+                console.error('❌ Firebase Messaging initialization failed:', error);
+                this.messaging = null;
+            }
+        } else {
+            console.warn('⚠️ Firebase Messaging not initialized - app not available or unsupported browser');
+            this.messaging = null;
+        }
     }
 
     static getInstance(): PushNotificationService {
@@ -47,6 +75,12 @@ export class PushNotificationService {
 
     private async initializeMessaging() {
         try {
+            // Check if messaging is available
+            if (!this.messaging) {
+                console.warn('⚠️ Firebase Messaging not available, skipping initialization');
+                return;
+            }
+
             // Register service worker
             if ('serviceWorker' in navigator) {
                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
@@ -76,14 +110,9 @@ export class PushNotificationService {
                 icon: notification.icon || '/logo.png',
                 badge: '/logo.png',
                 tag: 'fcm-foreground-notification',
-                requireInteraction: true,
-                actions: [
-                    {
-                        action: 'view',
-                        title: 'View',
-                        icon: '/logo.png'
-                    }
-                ]
+                requireInteraction: true
+                // Actions are only supported for ServiceWorkerRegistration.showNotification()
+                // Removed actions to fix runtime error
             };
 
             const notif = new Notification(notification.title || 'New Message', options);
@@ -122,6 +151,12 @@ export class PushNotificationService {
 
     async getDeviceToken(): Promise<string | null> {
         try {
+            // Check if messaging is available
+            if (!this.messaging) {
+                console.warn('⚠️ Firebase Messaging not available, cannot get device token');
+                return null;
+            }
+
             // Return cached token if available
             if (this.currentToken) {
                 console.log('🔄 Using cached FCM token');
@@ -165,7 +200,7 @@ export class PushNotificationService {
             }
 
             // Get API base URL from environment
-            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001';
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
             // Prepare device info
             const deviceInfo = {
@@ -230,7 +265,7 @@ export class PushNotificationService {
 
             if (!token) {
                 // Try to get current token (but don't request permission)
-                if (Notification.permission === 'granted') {
+                if (Notification.permission === 'granted' && this.messaging) {
                     try {
                         token = await getToken(this.messaging);
                     } catch (error) {
@@ -245,7 +280,7 @@ export class PushNotificationService {
             }
 
             // Get API base URL from environment
-            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001';
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
             const response = await fetch(`${apiBaseUrl}/api/auth/device-token`, {
                 method: 'DELETE',
@@ -287,7 +322,16 @@ export class PushNotificationService {
     }
 
     isSupported(): boolean {
-        return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+        try {
+            return typeof window !== 'undefined' && 
+                   'serviceWorker' in navigator && 
+                   'PushManager' in window && 
+                   'Notification' in window &&
+                   !!this.messaging;
+        } catch (error) {
+            console.error('❌ Error checking push notification support:', error);
+            return false;
+        }
     }
 
     getPermissionStatus(): NotificationPermission {

@@ -12,4 +12,5 @@ export interface User {
     stripe_customer_id?: string;
     stripe_subscription_id?: string;
     credits_balance?: number;
+    dog_image?: string;
 }

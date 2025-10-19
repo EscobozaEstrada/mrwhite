@@ -375,10 +375,21 @@ class ConversationService:
             if not conversation_ids:
                 return True, 'No conversations to delete'
             
-            # Delete all messages for these conversations
+            # Import Attachment model for proper deletion order
+            from app.models.message import Attachment
+            
+            # Get all message IDs for these conversations
+            messages = Message.query.filter(Message.conversation_id.in_(conversation_ids)).all()
+            message_ids = [msg.id for msg in messages]
+            
+            if message_ids:
+                # Delete attachments first (foreign key constraint)
+                Attachment.query.filter(Attachment.message_id.in_(message_ids)).delete(synchronize_session=False)
+            
+            # Then delete all messages for these conversations
             Message.query.filter(Message.conversation_id.in_(conversation_ids)).delete(synchronize_session=False)
             
-            # Now delete all conversations
+            # Finally delete all conversations
             Conversation.query.filter_by(user_id=user_id).delete(synchronize_session=False)
             
             # Commit the changes

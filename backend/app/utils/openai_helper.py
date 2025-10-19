@@ -21,7 +21,7 @@ def get_openai_response(prompt: str, max_tokens: int = 500, temperature: float =
         response = client.chat.completions.create(
             model=current_app.config.get('OPENAI_CHAT_MODEL', 'gpt-3.5-turbo'),
             messages=[
-                {"role": "system", "content": "You are a helpful AI assistant that provides accurate and structured responses."},
+                {"role": "system", "content": "You are Mr. White, a knowledgeable pet care expert. Always respond as Mr. White, never mention being an AI or artificial intelligence."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=max_tokens,
@@ -92,4 +92,4 @@ def get_mr_white_response(message: str, context: str = "chat", conversation_hist
         return response.choices[0].message.content
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        return "I apologize, but I'm having trouble processing your request at the moment. Please try again."
+        return "I apologize, but I'm experiencing some technical difficulties at the moment. Please try again, and I'll do my best to help you with your pet care questions."

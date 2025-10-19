@@ -119,6 +119,7 @@ proto-plus==1.26.1
 protobuf==6.31.1
 prov==2.1.1
 psycopg==3.2.9
+psycopg-binary==3.2.9
 psycopg-pool==3.2.6
 psycopg2-binary==2.9.10
 puremagic==1.30

@@ -13,6 +13,7 @@ export interface Reminder {
     health_record_id?: number;
     created_at: string;
     completed_at?: string;
+    priority: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export enum ReminderType {
@@ -42,6 +43,7 @@ export interface CreateReminderRequest {
     send_push?: boolean;
     days_before_reminder?: number;
     health_record_id?: number;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export interface ReminderSummary {

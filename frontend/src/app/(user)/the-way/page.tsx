@@ -5,7 +5,7 @@ import FadeInSection from "@/components/FadeInSection";
 import ImagePop from "@/components/ImagePop";
 import ShakingIcon from "@/components/ShakingIcon";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import Image from "next/image";
 import { AiFillLike } from "react-icons/ai";
 import { BiSolidBookAlt } from "react-icons/bi";

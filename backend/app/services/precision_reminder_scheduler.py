@@ -57,7 +57,7 @@ class PrecisionReminderScheduler:
         self.job_defaults = {
             'coalesce': False,
             'max_instances': 1,
-            'misfire_grace_time': 300  # 5 minutes grace time
+            'misfire_grace_time': 120  # 2 minute grace time
         }
         
         # Initialize scheduler
@@ -168,11 +168,11 @@ class PrecisionReminderScheduler:
                 max_instances=1
             )
             
-            # 🎯 CONTEXT7 ENHANCEMENT: Follow-up notification checks every 5 minutes
+            # Follow-up notification checks every 1 minute (changed from 5 minutes)
             self.scheduler.add_job(
                 func=self._check_followup_notifications,
                 trigger='interval',
-                minutes=5,
+                minutes=2,  # Changed from 5 minutes to 2 minute
                 id='followup_notifications_check',
                 replace_existing=True,
                 max_instances=1
@@ -385,7 +385,7 @@ class PrecisionReminderScheduler:
             # Get user's timezone with comprehensive fallback strategy
             user = db.session.query(User).get(reminder.user_id)
             
-            # 🎯 CONTEXT7 ENHANCEMENT: Enhanced timezone detection and validation
+            # 🎯 ENHANCED TIMEZONE DETECTION: Get user timezone
             if user and user.timezone:
                 try:
                     user_tz = pytz.timezone(user.timezone)
@@ -399,48 +399,34 @@ class PrecisionReminderScheduler:
                     except:
                         db.session.rollback()
             else:
-                # Default timezone determination with better logic
-                try:
-                    import tzlocal
-                    system_tz = tzlocal.get_localzone()
-                    # Validate system timezone
-                    if hasattr(system_tz, 'zone') and system_tz.zone:
-                        user_tz = system_tz
-                        logger.debug(f"✅ Using system timezone: {system_tz}")
-                        
-                        # Update user timezone if not set
-                        if user and not user.timezone:
-                            try:
-                                user.timezone = str(system_tz)
-                                db.session.commit()
-                                logger.info(f"📍 Updated user {user.id} timezone to: {system_tz}")
-                            except:
-                                db.session.rollback()
-                    else:
-                        user_tz = pytz.UTC
-                        logger.debug("⚠️  System timezone invalid, using UTC")
-                except Exception:
-                    user_tz = pytz.UTC
-                    logger.debug("⚠️  Unable to detect system timezone, using UTC as fallback")
+                # Default timezone fallback
+                user_tz = pytz.UTC
+                logger.debug("⚠️  No user timezone found, using UTC")
             
-            # 🎯 CONTEXT7 ENHANCEMENT: Check for timezone metadata from enhanced creation
+            # 🎯 CRITICAL FIX: Check for timezone metadata from reminder creation
             timezone_metadata = None
+            timezone_aware_creation = False
             if reminder.extra_data:
                 try:
-                    metadata = json.loads(reminder.extra_data)
+                    if isinstance(reminder.extra_data, str):
+                        metadata = json.loads(reminder.extra_data)
+                    else:
+                        metadata = reminder.extra_data
+                    
                     timezone_metadata = metadata if isinstance(metadata, dict) else None
                     if timezone_metadata and 'user_timezone' in timezone_metadata:
                         # Use timezone from metadata for consistency
                         metadata_tz = timezone_metadata['user_timezone']
                         try:
                             user_tz = pytz.timezone(metadata_tz)
-                            logger.info(f"🌍 Using timezone from metadata: {metadata_tz}")
+                            timezone_aware_creation = timezone_metadata.get('timezone_aware_creation', False)
+                            logger.info(f"🌍 Using timezone from metadata: {metadata_tz}, timezone_aware: {timezone_aware_creation}")
                         except:
                             logger.warning(f"❌ Invalid timezone in metadata: {metadata_tz}")
-                except:
-                    logger.debug("📋 No valid timezone metadata found")
+                except Exception as parse_error:
+                    logger.debug(f"📋 Could not parse timezone metadata: {parse_error}")
             
-            # Determine trigger date and time with enhanced logic
+            # Determine trigger date and time
             if reminder.reminder_date and reminder.reminder_time:
                 trigger_date = reminder.reminder_date
                 trigger_time = reminder.reminder_time
@@ -454,106 +440,120 @@ class PrecisionReminderScheduler:
             # Create naive datetime first
             naive_trigger_datetime = datetime.combine(trigger_date, trigger_time)
             
-            # Add a small buffer (30 seconds earlier) to ensure notifications are sent on time
-            # This helps prevent notifications from arriving late due to processing delays
-            naive_trigger_datetime = naive_trigger_datetime - timedelta(seconds=30)
-            
-            logger.debug(f"🕐 Naive trigger datetime (with 30s buffer): {naive_trigger_datetime}")
-            
-            # Get current time in user timezone for comparison
-            now_utc = datetime.now(pytz.UTC)
-            now_user_tz = now_utc.astimezone(user_tz)
-            current_date = now_user_tz.date()
-            current_time = now_user_tz.time()
-            
-            logger.debug(f"🌍 Current time in user TZ ({user_tz}): {now_user_tz}")
-            logger.debug(f"📊 Current date: {current_date}, current time: {current_time}")
-            
-            # 🎯 CONTEXT7 ENHANCEMENT: Smart time validation and adjustment
-            # If the reminder is for today but time has passed, move to tomorrow
-            if (trigger_date == current_date and trigger_time <= current_time):
-                # Add one day if the time has already passed today
-                logger.info(f"⏰ Reminder time {trigger_time} has passed today, moving to tomorrow")
-                trigger_date = trigger_date + timedelta(days=1)
-                naive_trigger_datetime = datetime.combine(trigger_date, trigger_time)
-                # Apply the buffer again after recalculating
-                naive_trigger_datetime = naive_trigger_datetime - timedelta(seconds=30)
+            # 🎯 CRITICAL FIX: Smart timezone handling based on creation context
+            if timezone_aware_creation and timezone_metadata:
+                # This reminder was created with explicit timezone awareness
+                # The stored time is ALREADY in the user's local timezone
+                logger.info(f"🌍 Processing timezone-aware reminder - time already in user's local timezone")
                 
-                # Update the reminder in database to reflect the change
-                try:
-                    if reminder.reminder_date and reminder.reminder_time:
-                        reminder.reminder_date = trigger_date
-                    else:
-                        reminder.due_date = trigger_date
-                    db.session.commit()
-                    logger.info(f"📝 Updated reminder {reminder.id} date to {trigger_date}")
-                except:
-                    db.session.rollback()
-                    logger.warning(f"⚠️  Failed to update reminder {reminder.id} date")
+                # Get current time in user timezone for validation
+                now_utc = datetime.now(pytz.UTC)
+                now_user_tz = now_utc.astimezone(user_tz)
+                current_date = now_user_tz.date()
+                current_time = now_user_tz.time()
+                
+                # Check if time has passed today
+                if (trigger_date == current_date and trigger_time <= current_time):
+                    logger.info(f"⏰ Reminder time {trigger_time} has passed today, moving to tomorrow")
+                    trigger_date = trigger_date + timedelta(days=1)
+                    naive_trigger_datetime = datetime.combine(trigger_date, trigger_time)
+                    
+                    # Update the reminder in database
+                    try:
+                        if reminder.reminder_date and reminder.reminder_time:
+                            reminder.reminder_date = trigger_date
+                        else:
+                            reminder.due_date = trigger_date
+                        db.session.commit()
+                        logger.info(f"📝 Updated reminder {reminder.id} date to {trigger_date}")
+                    except:
+                        db.session.rollback()
+                        logger.warning(f"⚠️  Failed to update reminder {reminder.id} date")
+                
+                # Localize the naive datetime in user's timezone
+                aware_trigger_datetime = user_tz.localize(naive_trigger_datetime)
+                logger.debug(f"🕐 Localized timezone-aware datetime: {aware_trigger_datetime}")
             
-            # If the reminder date is in the past, skip it (unless it's a recurring reminder)
-            elif trigger_date < current_date:
+            else:
+                # This is a legacy reminder or created without explicit timezone awareness
+                # Apply standard timezone conversion logic
+                logger.info(f"🕰️  Processing standard reminder with timezone conversion")
+                
+                # Get current time in user timezone for validation
+                now_utc = datetime.now(pytz.UTC)
+                now_user_tz = now_utc.astimezone(user_tz)
+                current_date = now_user_tz.date()
+                current_time = now_user_tz.time()
+                
+                # Check if time has passed today
+                if (trigger_date == current_date and trigger_time <= current_time):
+                    logger.info(f"⏰ Reminder time {trigger_time} has passed today, moving to tomorrow")
+                    trigger_date = trigger_date + timedelta(days=1)
+                    naive_trigger_datetime = datetime.combine(trigger_date, trigger_time)
+                    
+                    # Update the reminder in database
+                    try:
+                        if reminder.reminder_date and reminder.reminder_time:
+                            reminder.reminder_date = trigger_date
+                        else:
+                            reminder.due_date = trigger_date
+                        db.session.commit()
+                        logger.info(f"📝 Updated reminder {reminder.id} date to {trigger_date}")
+                    except:
+                        db.session.rollback()
+                        logger.warning(f"⚠️  Failed to update reminder {reminder.id} date")
+                
+                # For legacy reminders, assume the stored time is in user's timezone
+                try:
+                    aware_trigger_datetime = user_tz.localize(naive_trigger_datetime)
+                    logger.debug(f"🕐 Localized legacy reminder: {aware_trigger_datetime}")
+                except ValueError as e:
+                    # Handle DST transitions
+                    if 'ambiguous' in str(e):
+                        aware_trigger_datetime = user_tz.localize(naive_trigger_datetime, is_dst=False)
+                    elif 'non-existent' in str(e):
+                        aware_trigger_datetime = user_tz.localize(naive_trigger_datetime, is_dst=True)
+                    else:
+                        logger.error(f"❌ Timezone localization error: {e}")
+                        aware_trigger_datetime = pytz.UTC.localize(naive_trigger_datetime)
+                    logger.debug(f"🕐 Handled DST transition: {aware_trigger_datetime}")
+            
+            # Skip if the reminder date is in the past (unless it's recurring)
+            if trigger_date < datetime.now().date():
                 if reminder.recurrence_type and reminder.recurrence_type.value != 'none':
-                    logger.info(f"🔄 Reminder date {trigger_date} is in the past, but it's recurring - will calculate next occurrence")
-                    # Let the recurring reminder handler deal with this
+                    logger.info(f"🔄 Reminder date {trigger_date} is in the past, but it's recurring")
                     return None
                 else:
                     logger.info(f"⚠️  Reminder date {trigger_date} is in the past, skipping")
                     return None
             
-            # 🎯 CONTEXT7 ENHANCEMENT: Timezone-aware localization with metadata support
-            try:
-                # Check if we have original timezone information from timezone-aware creation
-                if timezone_metadata and 'timezone_aware_creation' in timezone_metadata:
-                    # This reminder was created with timezone awareness
-                    logger.info(f"🌍 Processing timezone-aware reminder created at: {timezone_metadata.get('extraction_timestamp', 'unknown')}")
-                    
-                    # The naive_trigger_datetime represents user's local time at creation
-                    # We need to localize it properly
-                    aware_trigger_datetime = user_tz.localize(naive_trigger_datetime)
-                    logger.debug(f"🕐 Localized timezone-aware trigger datetime: {aware_trigger_datetime}")
-                else:
-                    # Standard localization for non-timezone-aware reminders
-                    aware_trigger_datetime = user_tz.localize(naive_trigger_datetime)
-                    logger.debug(f"🕐 Localized standard trigger datetime: {aware_trigger_datetime}")
-                    
-            except Exception as localize_error:
-                logger.error(f"❌ Error localizing datetime: {localize_error}")
-                # If localization fails, check if it's already timezone-aware
-                if naive_trigger_datetime.tzinfo is None:
-                    aware_trigger_datetime = pytz.UTC.localize(naive_trigger_datetime)
-                    logger.warning("⚠️  Localization failed, using UTC")
-                else:
-                    aware_trigger_datetime = naive_trigger_datetime
-                    logger.warning("⚠️  Using existing timezone info")
-            
-            # Convert to UTC for APScheduler
+            # Convert to UTC for APScheduler (with 30-second buffer for reliability)
             utc_trigger_datetime = aware_trigger_datetime.astimezone(pytz.UTC)
-            logger.debug(f"🌐 UTC trigger datetime for scheduler: {utc_trigger_datetime}")
+            
+            # Apply small buffer to ensure timely delivery
+            utc_trigger_datetime = utc_trigger_datetime - timedelta(seconds=30)
             
             # Final validation - ensure it's in the future
+            now_utc = datetime.now(pytz.UTC)
             if utc_trigger_datetime <= now_utc:
                 time_diff = (now_utc - utc_trigger_datetime).total_seconds()
                 if time_diff < 300:  # Less than 5 minutes in the past - allow it
                     logger.warning(f"⚠️  Trigger time {utc_trigger_datetime} is {time_diff:.0f}s in the past, but allowing")
                 else:
-                    logger.warning(f"❌ Final check: trigger time {utc_trigger_datetime} is {time_diff:.0f}s in the past (now: {now_utc})")
+                    logger.warning(f"❌ Trigger time {utc_trigger_datetime} is {time_diff:.0f}s in the past (now: {now_utc})")
                     return None
             
             # Log comprehensive timing information
             logger.info(f"✅ Calculated trigger time for reminder {reminder.id}:")
             logger.info(f"   📍 User timezone: {user_tz}")
-            logger.info(f"   🕐 Local time: {aware_trigger_datetime}")
-            logger.info(f"   🌐 UTC time: {utc_trigger_datetime}")
-            if timezone_metadata:
-                logger.info(f"   🌍 Timezone-aware: {timezone_metadata.get('timezone_aware_creation', False)}")
+            logger.info(f"   🕐 User local time: {aware_trigger_datetime}")
+            logger.info(f"   🌐 UTC time (with buffer): {utc_trigger_datetime}")
+            logger.info(f"   🌍 Timezone-aware creation: {timezone_aware_creation}")
             
             return utc_trigger_datetime
             
         except Exception as e:
             logger.error(f"❌ Error calculating trigger time for reminder {reminder.id}: {str(e)}")
-            import traceback
-            logger.error(f"📊 Traceback: {traceback.format_exc()}")
             return None
     
     def unschedule_reminder(self, reminder_id: int):

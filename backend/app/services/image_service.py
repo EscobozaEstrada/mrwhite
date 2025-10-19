@@ -23,7 +23,7 @@ import io
 
 from openai import OpenAI
 from app.utils.s3_handler import upload_file_to_s3, get_s3_url, delete_file_from_s3
-from app.utils.file_handler_optimized import extract_and_store
+from app.utils.file_handler import extract_and_store
 from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -41,7 +41,8 @@ class ImageService:
         
     def process_image_upload(self, file: FileStorage, user_id: int, 
                            conversation_id: Optional[int] = None,
-                           message_id: Optional[int] = None) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+                           message_id: Optional[int] = None,
+                           user_description: Optional[str] = None) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
         Comprehensive image processing pipeline
         
@@ -50,12 +51,15 @@ class ImageService:
             user_id: User ID who uploaded the image
             conversation_id: Optional conversation ID for chat context
             message_id: Optional message ID for chat context
+            user_description: Optional user-provided description for the image
             
         Returns:
             Tuple of (success, message, image_data)
         """
         logger.info(f"🖼️  Starting image processing for user {user_id}, file: {file.filename}")
         logger.info(f"📝 Context: conversation_id={conversation_id}, message_id={message_id}")
+        if user_description is not None:
+            logger.info(f"👤 User description provided: {user_description[:50]}...")
         
         try:
             # Validate image
@@ -79,18 +83,33 @@ class ImageService:
                 return False, "Failed to upload image to S3", None
             logger.info(f"✅ S3 upload successful: {s3_url}")
             
-            # Get image analysis from OpenAI Vision
-            logger.info(f"🤖 Starting OpenAI Vision analysis...")
-            analysis_result = self._analyze_image_with_openai(file, s3_url)
-            if not analysis_result[0]:
-                logger.warning(f"⚠️  OpenAI analysis failed: {analysis_result[1]}")
-                # Continue without analysis rather than failing completely
-                description = "Image uploaded successfully (analysis unavailable)"
-                analysis_data = {}
+            # Use user-provided description if available, otherwise get AI description
+            description = ""
+            analysis_data = {}
+            
+            # Handle description based on what was provided
+            if user_description is not None:
+                # User explicitly provided a description (might be empty string or content)
+                if user_description.strip():
+                    # Non-empty description provided
+                    logger.info(f"👤 Using non-empty user-provided description: {user_description[:100]}...")
+                    description = user_description
+                else:
+                    # Empty string explicitly provided - leave description empty
+                    logger.info(f"👤 Empty description explicitly provided, skipping AI analysis")
             else:
-                description = analysis_result[1]
-                analysis_data = analysis_result[2]
-                logger.info(f"✅ OpenAI analysis successful: {len(description)} characters")
+                # No user description provided, generate AI description
+                logger.info(f"🤖 No user description provided, starting OpenAI Vision analysis...")
+                analysis_result = self._analyze_image_with_openai(file, s3_url)
+                if not analysis_result[0]:
+                    logger.warning(f"⚠️  OpenAI analysis failed: {analysis_result[1]}")
+                    # Continue without analysis rather than failing completely
+                    description = ""
+                    analysis_data = {}
+                else:
+                    description = analysis_result[1]
+                    analysis_data = analysis_result[2]
+                    logger.info(f"✅ OpenAI analysis successful: {len(description)} characters")
             
             # Get image metadata
             logger.info(f"📊 Extracting image metadata...")
@@ -98,7 +117,7 @@ class ImageService:
             logger.info(f"✅ Metadata extracted: {metadata.get('width', 0)}x{metadata.get('height', 0)}")
             
             # Store in database
-            logger.info(f"💾 Storing image in database...")
+            logger.info(f"💾 Storing image in database with description: {description[:50]}...")
             image_record = self._store_image_in_database(
                 user_id=user_id,
                 filename=unique_filename,
@@ -439,19 +458,22 @@ This is a user-uploaded image that can be referenced in future conversations. Th
             logger.error(f"Error adding image to knowledge base: {str(e)}")
     
     def get_user_images(self, user_id: int, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get user's uploaded images for gallery"""
+        """Get user's uploaded images for gallery (includes both user_images and IC images)"""
         try:
             from app.models.image import UserImage
+            from sqlalchemy import text
             
-            images = UserImage.query.filter_by(
+            # Get images from user_images table
+            user_images = UserImage.query.filter_by(
                 user_id=user_id,
                 is_deleted=False
             ).order_by(
-                UserImage.created_at.desc()
+                UserImage.display_order.asc(),  # Primary sort by display_order
+                UserImage.created_at.desc()     # Secondary sort by creation date
             ).limit(limit).offset(offset).all()
             
             image_list = []
-            for image in images:
+            for image in user_images:
                 # Generate proper URL for frontend access
                 image_url = self._generate_frontend_url(image.s3_url)
                 
@@ -465,9 +487,66 @@ This is a user-uploaded image that can be referenced in future conversations. Th
                     'uploaded_at': image.created_at.isoformat(),
                     'file_size': image.image_metadata.get('file_size', 0) if image.image_metadata else 0,
                     'width': image.image_metadata.get('width', 0) if image.image_metadata else 0,
-                    'height': image.image_metadata.get('height', 0) if image.image_metadata else 0
+                    'height': image.image_metadata.get('height', 0) if image.image_metadata else 0,
+                    'display_order': image.display_order,  # Include display_order in the response
+                    'source': 'gallery'  # Mark as gallery source
                 }
                 image_list.append(image_data)
+            
+            # If we have fewer images than requested, try to get IC images
+            if len(image_list) < limit:
+                remaining_limit = limit - len(image_list)
+                
+                # Get IC images that haven't been synced yet
+                ic_images_query = text("""
+                    SELECT id, filename, file_type, file_size, mime_type,
+                           s3_key, s3_url, extracted_text, image_analysis,
+                           conversation_id, message_id, created_at, uploaded_at
+                    FROM ic_documents
+                    WHERE user_id = :user_id
+                      AND file_type IN ('jpg', 'jpeg', 'png', 'gif', 'webp', 'image')
+                      AND is_deleted = false
+                      AND s3_url IS NOT NULL
+                      AND s3_url != ''
+                      AND NOT EXISTS (
+                          SELECT 1 FROM user_images 
+                          WHERE user_images.user_id = :user_id 
+                            AND user_images.s3_url = ic_documents.s3_url
+                            AND user_images.is_deleted = false
+                      )
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                """)
+                
+                ic_result = db.session.execute(ic_images_query, {
+                    'user_id': user_id,
+                    'limit': remaining_limit
+                })
+                
+                for row in ic_result:
+                    ic_image_data = {
+                        'id': f"ic_{row[0]}",  # Prefix with ic_ to avoid ID conflicts
+                        'filename': row[1],
+                        'original_filename': row[1],
+                        'url': row[6],  # s3_url
+                        'description': row[7] or '',  # extracted_text
+                        'metadata': {
+                            'file_size': row[3] or 0,
+                            'format': row[2] or '',
+                            'content_type': row[4] or '',
+                            'source': 'intelligent_chat',
+                            'ic_document_id': row[0],
+                            'width': row[8].get('width', 0) if row[8] else 0,
+                            'height': row[8].get('height', 0) if row[8] else 0
+                        },
+                        'uploaded_at': row[11].isoformat() if row[11] else '',
+                        'file_size': row[3] or 0,
+                        'width': row[8].get('width', 0) if row[8] else 0,
+                        'height': row[8].get('height', 0) if row[8] else 0,
+                        'display_order': 999,  # IC images at the end
+                        'source': 'intelligent_chat'  # Mark as IC source
+                    }
+                    image_list.append(ic_image_data)
             
             return image_list
             
@@ -485,7 +564,7 @@ This is a user-uploaded image that can be referenced in future conversations. Th
             # If it's a local path, generate full backend URL
             if stored_url.startswith('/uploads/images/'):
                 # Get the backend base URL from Flask config or environment
-                backend_url = os.getenv('BACKEND_BASE_URL', 'http://localhost:5001')
+                backend_url = os.getenv('BACKEND_BASE_URL')
                 return f"{backend_url}{stored_url}"
             
             # Fallback - return as-is
@@ -564,5 +643,197 @@ This is a user-uploaded image that can be referenced in future conversations. Th
             logger.error(f"Error getting image by ID: {str(e)}")
             return None
 
+    def update_image_order(self, user_id: int, image_ids: List[int]) -> Tuple[bool, str]:
+        """
+        Update the display order of user's images
+        
+        Args:
+            user_id: User ID
+            image_ids: List of image IDs in the desired order
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            from app.models.image import UserImage
+            
+            # Verify all images belong to the user
+            user_image_ids = set([img.id for img in UserImage.query.filter_by(
+                user_id=user_id,
+                is_deleted=False
+            ).all()])
+            
+            # Check if all provided IDs belong to the user
+            if not all(img_id in user_image_ids for img_id in image_ids):
+                return False, "One or more images do not belong to the user"
+            
+            # Update display_order for each image
+            for index, image_id in enumerate(image_ids):
+                image = UserImage.query.filter_by(id=image_id, user_id=user_id).first()
+                if image:
+                    image.display_order = index
+            
+            db.session.commit()
+            logger.info(f"Updated display order for {len(image_ids)} images for user {user_id}")
+            
+            return True, f"Successfully updated image order"
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error updating image order: {str(e)}")
+            return False, f"Failed to update image order: {str(e)}"
+
+    def update_image_description(self, user_id: int, image_id: int, description: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Update an image's description
+        
+        Args:
+            user_id: User ID who owns the image
+            image_id: Image ID to update
+            description: New description for the image
+            
+        Returns:
+            Tuple of (success, message, image_data)
+        """
+        try:
+            from app.models.image import UserImage
+            
+            # Get the image
+            image = UserImage.query.filter_by(
+                id=image_id,
+                user_id=user_id,
+                is_deleted=False
+            ).first()
+            
+            if not image:
+                return False, "Image not found", None
+            
+            # Update the description
+            image.description = description
+            image.updated_at = datetime.now(timezone.utc)
+            db.session.commit()
+            
+            # Update the knowledge base entry
+            self._update_knowledge_base_description(
+                user_id=user_id,
+                image_id=image_id,
+                filename=image.original_filename,
+                description=description,
+                s3_url=image.s3_url,
+                analysis_data=image.analysis_data or {}
+            )
+            
+            # Return updated image data
+            image_data = {
+                'id': image.id,
+                'filename': image.filename,
+                'original_filename': image.original_filename,
+                'url': self._generate_frontend_url(image.s3_url),
+                'description': description,
+                'analysis': image.analysis_data,
+                'metadata': image.image_metadata,
+                'uploaded_at': image.created_at.isoformat(),
+                'updated_at': image.updated_at.isoformat(),
+                'file_size': image.image_metadata.get('file_size', 0) if image.image_metadata else 0
+            }
+            
+            logger.info(f"✅ Updated description for image {image_id} for user {user_id}")
+            return True, "Image description updated successfully", image_data
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error updating image description: {str(e)}")
+            return False, f"Failed to update image description: {str(e)}", None
+    
+    def _update_knowledge_base_description(self, user_id: int, image_id: int, filename: str,
+                                        description: str, s3_url: str, analysis_data: Dict):
+        """Update image description in knowledge base for RAG"""
+        try:
+            # Create a comprehensive text representation for the knowledge base
+            knowledge_text = f"""
+Image: {filename}
+Description: {description}
+URL: {s3_url}
+Image ID: {image_id}
+Analysis: {analysis_data.get('model_used', 'User provided')} description
+Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}
+
+This is a user-uploaded image that can be referenced in future conversations. The AI can describe this image and provide the image URL when relevant to user queries.
+"""
+            
+            # Use existing file handler to update knowledge base
+            from io import StringIO
+            text_file = StringIO(knowledge_text)
+            
+            # Add to vector database using existing infrastructure
+            # Note: This will replace the existing entry if it exists
+            success, message = extract_and_store(
+                file_content=knowledge_text,
+                user_id=user_id,
+                filename=f"image_{image_id}_{filename}.txt",
+                file_type="image_description"
+            )
+            
+            if success:
+                logger.info(f"Updated image {image_id} in knowledge base for user {user_id}")
+            else:
+                logger.warning(f"Failed to update image in knowledge base: {message}")
+                
+        except Exception as e:
+            logger.error(f"Error updating image in knowledge base: {str(e)}")
+
+    def update_image_title(self, user_id: int, image_id: int, title: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Update an image's title
+        
+        Args:
+            user_id: User ID who owns the image
+            image_id: Image ID to update
+            title: New title for the image
+            
+        Returns:
+            Tuple of (success, message, image_data)
+        """
+        try:
+            from app.models.image import UserImage
+            
+            # Get the image
+            image = UserImage.query.filter_by(
+                id=image_id,
+                user_id=user_id,
+                is_deleted=False
+            ).first()
+            
+            if not image:
+                return False, "Image not found", None
+            
+            # Update the title
+            image.title = title
+            image.updated_at = datetime.now(timezone.utc)
+            db.session.commit()
+            
+            # Return updated image data
+            image_data = {
+                'id': image.id,
+                'filename': image.filename,
+                'original_filename': image.original_filename,
+                'url': self._generate_frontend_url(image.s3_url),
+                'title': title,
+                'description': image.description,
+                'analysis': image.analysis_data,
+                'metadata': image.image_metadata,
+                'uploaded_at': image.created_at.isoformat(),
+                'updated_at': image.updated_at.isoformat(),
+                'file_size': image.image_metadata.get('file_size', 0) if image.image_metadata else 0
+            }
+            
+            logger.info(f"✅ Updated title for image {image_id} for user {user_id}")
+            return True, "Image title updated successfully", image_data
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error updating image title: {str(e)}")
+            return False, f"Failed to update image title: {str(e)}", None
+
 # Global instance
-image_service = ImageService() 
+image_service = ImageService()

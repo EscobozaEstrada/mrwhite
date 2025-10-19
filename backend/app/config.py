@@ -30,7 +30,9 @@ class Config:
     MAIL_USE_TLS = True    
     MAIL_USERNAME = os.getenv('SES_SMTP_USERNAME')
     MAIL_PASSWORD = os.getenv('SES_SMTP_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.getenv('SES_EMAIL_FROM', 'noreply@mrwhite.com')
+    # MAIL_DEFAULT_SENDER = os.getenv('SES_EMAIL_FROM', 'noreply@mrwhite.com')
+    MAIL_DEFAULT_SENDER = "no-reply@mrwhiteaidogbuddy.com"
+    ADMIN_EMAIL = "mrwhitetheai@gmail.com"
     # MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
     # MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True').lower() in ['true', 'yes', '1']
     # MAIL_USERNAME = os.getenv('MAIL_USERNAME')
@@ -38,7 +40,7 @@ class Config:
     # MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@mrwhite.com')
 
     # CORS Configuration
-    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+    FRONTEND_URL = os.getenv('FRONTEND_URL')
     CORS_MAX_AGE = int(os.getenv('CORS_MAX_AGE', '3600'))
 
     # JWT Configuration
@@ -75,7 +77,7 @@ class Config:
     FLASK_PORT = int(os.getenv('FLASK_PORT', '5001'))
     
     # Backend URL for image serving
-    BACKEND_BASE_URL = os.getenv('BACKEND_BASE_URL', 'http://localhost:5001')
+    BACKEND_BASE_URL = os.getenv('BACKEND_BASE_URL')
 
     # Database Schema Limits
     MAX_USERNAME_LENGTH = int(os.getenv('MAX_USERNAME_LENGTH', '100'))

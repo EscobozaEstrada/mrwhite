@@ -15,6 +15,7 @@ from app.middleware.auth import require_auth
 from app.middleware.validation import validate_json_content
 from app.services.image_service import image_service
 from app.models.image import UserImage
+from app import db
 import os
 
 gallery_bp = Blueprint('gallery', __name__, url_prefix='/api/gallery')
@@ -69,12 +70,13 @@ def upload_image():
             except ValueError:
                 message_id = None
         
-        # Process image upload
+        # Process image upload with empty description to prevent AI generation
         success, message, image_data = image_service.process_image_upload(
             file=file,
             user_id=user_id,
             conversation_id=conversation_id,
-            message_id=message_id
+            message_id=message_id,
+            user_description=""  # Pass empty string to prevent AI description
         )
         
         if success:
@@ -94,6 +96,108 @@ def upload_image():
         return jsonify({
             'success': False,
             'message': 'Internal server error'
+        }), 500
+
+@gallery_bp.route('/upload-to-folder', methods=['POST'])
+@require_auth
+def upload_image_to_folder():
+    """
+    Upload an image directly to a folder
+    
+    Form Data:
+    - images: Image files to upload
+    - folderId: ID of the folder to add the images to
+    
+    Returns:
+    - success: bool
+    - message: str
+    - images: list of uploaded image data
+    """
+    try:
+        user_id = request.current_user['id']
+        
+        # Check if image files are present
+        if 'images' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'No image files provided'
+            }), 400
+        
+        # Get folder ID from form data
+        folder_id = request.form.get('folderId')
+        if not folder_id:
+            return jsonify({
+                'success': False,
+                'message': 'Folder ID is required'
+            }), 400
+            
+        try:
+            folder_id = int(folder_id)
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid folder ID'
+            }), 400
+            
+        # Verify folder exists and belongs to user
+        from app.models.folder import ImageFolder
+        folder = ImageFolder.query.filter_by(id=folder_id, user_id=user_id, is_deleted=False).first()
+        if not folder:
+            return jsonify({
+                'success': False,
+                'message': 'Folder not found'
+            }), 404
+        
+        # Process each uploaded file
+        uploaded_images = []
+        files = request.files.getlist('images')
+        
+        for file in files:
+            if file.filename == '':
+                continue
+                
+            # Process image upload with empty description to prevent AI generation
+            success, message, image_data = image_service.process_image_upload(
+                file=file,
+                user_id=user_id,
+                conversation_id=None,
+                message_id=None,
+                user_description=""  # Pass empty string to prevent AI description
+            )
+            
+            if success:
+                uploaded_images.append(image_data)
+                
+                # Add image to folder
+                from app.models.folder_image import FolderImage
+                
+                # Get highest display_order in folder and increment
+                highest_order = db.session.query(db.func.max(FolderImage.display_order))\
+                    .filter(FolderImage.folder_id == folder_id).scalar() or 0
+                
+                # Add image to folder
+                folder_image = FolderImage(
+                    folder_id=folder_id,
+                    image_id=image_data['id'],
+                    display_order=highest_order + 1
+                )
+                
+                db.session.add(folder_image)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(uploaded_images)} images uploaded to folder successfully',
+            'images': uploaded_images
+        }), 200
+            
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error uploading images to folder: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Internal server error: {str(e)}'
         }), 500
 
 @gallery_bp.route('/images', methods=['GET'])
@@ -394,3 +498,156 @@ def analyze_image_url():
             'success': False,
             'message': f'Analysis failed: {str(e)}'
         }), 500 
+
+@gallery_bp.route('/reorder', methods=['POST'])
+@require_auth
+def reorder_images():
+    """
+    Update the order of user's images in the gallery
+    
+    JSON Body:
+    - imageIds: list of image IDs in the desired order
+    
+    Returns:
+    - success: bool
+    - message: str
+    """
+    try:
+        user_id = request.current_user['id']
+        data = request.get_json()
+        
+        if not data or 'imageIds' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Image IDs are required'
+            }), 400
+        
+        image_ids = data['imageIds']
+        
+        if not isinstance(image_ids, list) or not all(isinstance(id, int) for id in image_ids):
+            return jsonify({
+                'success': False,
+                'message': 'Invalid image IDs format'
+            }), 400
+        
+        # Update image order
+        success, message = image_service.update_image_order(user_id, image_ids)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': message
+            }), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error reordering images: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Internal server error'
+        }), 500 
+
+@gallery_bp.route('/images/<int:image_id>/description', methods=['PUT'])
+@require_auth
+def update_image_description(image_id):
+    """
+    Update an image's description
+    
+    JSON Body:
+    - description: New description for the image
+    
+    Returns:
+    - success: bool
+    - message: str
+    - image: Updated image data
+    """
+    try:
+        user_id = request.current_user['id']
+        data = request.get_json()
+        
+        if not data or 'description' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Description is required'
+            }), 400
+        
+        # Use the image service to update the description
+        success, message, image_data = image_service.update_image_description(
+            user_id=user_id,
+            image_id=image_id,
+            description=data['description']
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'image': image_data
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': message
+            }), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating image description: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Internal server error'
+        }), 500 
+
+
+@gallery_bp.route('/images/<int:image_id>/title', methods=['PUT'])
+@require_auth
+def update_image_title(image_id):
+    """
+    Update an image's title
+    
+    JSON Body:
+    - title: New title for the image
+    
+    Returns:
+    - success: bool
+    - message: str
+    - image: Updated image data
+    """
+    try:
+        user_id = request.current_user['id']
+        data = request.get_json()
+        
+        if not data or 'title' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Title is required'
+            }), 400
+        
+        # Use the image service to update the title
+        success, message, image_data = image_service.update_image_title(
+            user_id=user_id,
+            image_id=image_id,
+            title=data['title']
+        )
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message,
+                'image': image_data
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': message
+            }), 400
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating image title: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Internal server error'
+        }), 500

@@ -65,7 +65,7 @@ class CareArchiveService:
             # Upload to S3
             try:
                 s3_key = f"users/{user_id}/documents/{unique_filename}"
-                success, s3_url = upload_file_to_s3(file, s3_key, file.content_type)
+                success, message, s3_url = upload_file_to_s3(file, s3_key, file.content_type)
                 
                 if not success:
                     return False, "Failed to upload file to S3", None
@@ -334,6 +334,45 @@ class CareArchiveService:
             }
     
     @staticmethod
+    def search_care_records(user_id: int, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search care records for a user with a semantic query"""
+        try:
+            # First try semantic search if available
+            try:
+                results = CareArchiveService._search_care_records_semantic(user_id, query, limit)
+                if results:
+                    return results
+            except Exception as e:
+                current_app.logger.warning(f"Semantic search failed, falling back to basic search: {str(e)}")
+            
+            # Fall back to basic keyword search
+            care_records = CareRecord.query.filter(
+                CareRecord.user_id == user_id,
+                or_(
+                    CareRecord.title.ilike(f"%{query}%"),
+                    CareRecord.description.ilike(f"%{query}%")
+                )
+            ).order_by(desc(CareRecord.date_occurred)).limit(limit).all()
+            
+            # Format results
+            results = []
+            for record in care_records:
+                results.append({
+                    'id': record.id,
+                    'title': record.title,
+                    'category': record.category,
+                    'date_occurred': record.date_occurred.isoformat() if record.date_occurred else None,
+                    'content': record.description or "",
+                    'metadata': record.meta_data
+                })
+                
+            return results
+            
+        except Exception as e:
+            current_app.logger.error(f"Error searching care records: {str(e)}")
+            return []
+    
+    @staticmethod
     def _search_care_records_semantic(user_id: int, query: str, limit: int = 5) -> List[Dict]:
         """Search care records using semantic similarity in Pinecone"""
         try:
@@ -436,6 +475,16 @@ class CareArchiveService:
             db.session.rollback()
             current_app.logger.error(f"Error deleting document: {str(e)}")
             return False, str(e)
+    
+    @staticmethod
+    def get_document(document_id: int) -> Optional[Document]:
+        """Get a document by ID"""
+        try:
+            document = Document.query.get(document_id)
+            return document
+        except Exception as e:
+            current_app.logger.error(f"Error getting document: {str(e)}")
+            return None
     
     @staticmethod
     def get_knowledge_base_stats(user_id: int) -> Dict[str, Any]:

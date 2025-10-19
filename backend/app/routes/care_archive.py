@@ -1,18 +1,23 @@
 from flask import Blueprint, request, jsonify, current_app
-from datetime import datetime
+from datetime import datetime, timezone
 from werkzeug.utils import secure_filename
 from app.middleware.auth import require_auth
 from app.middleware.subscription import premium_required
 from app.middleware.usage_limits import check_document_usage, check_care_record_usage
 from app.services.care_archive_service import CareArchiveService
-from app.services.enhanced_chat_service import EnhancedChatService
+
 from app.middleware.validation import validate_json_content
+from app.middleware.credit_middleware import require_health_credits
+from app.models.conversation import Conversation
+from app.models.message import Message
+# Document model will be imported dynamically when needed
+from app import db
 import os
+import json
 
 care_archive_bp = Blueprint('care_archive', __name__)
 
-# Remove global service initialization to avoid application context issues
-# Services will be initialized when needed
+# Services are initialized locally to avoid application context issues
 
 @care_archive_bp.route('/upload-document', methods=['POST'])
 @require_auth
@@ -250,51 +255,6 @@ def delete_document(document_id):
         current_app.logger.error(f"Error deleting document: {str(e)}")
         return jsonify({'success': False, 'message': 'Internal server error'}), 500
 
-@care_archive_bp.route('/enhanced-chat', methods=['POST'])
-@require_auth
-@premium_required
-@validate_json_content
-def enhanced_chat():
-    """Enhanced chat with context from user's knowledge base"""
-    try:
-        chat_service = EnhancedChatService()  # Create service locally
-        user_id = request.current_user['id']
-        data = request.json
-        
-        current_app.logger.info("="*60)
-        current_app.logger.info("ENHANCED CHAT ENDPOINT CALLED")
-        current_app.logger.info(f"User ID: {user_id}")
-        current_app.logger.info(f"Request data: {data}")
-        current_app.logger.info("="*60)
-        
-        if 'message' not in data:
-            return jsonify({'success': False, 'message': 'Message is required'}), 400
-        
-        conversation_id = data.get('conversation_id')
-        thread_id = data.get('thread_id')
-        
-        current_app.logger.info(f"Extracted - conversation_id: {conversation_id}, thread_id: {thread_id}")
-        
-        # Generate contextual response using LangGraph agents
-        success, response, context_info = chat_service.generate_contextual_response(
-            user_id, data['message'], conversation_id, thread_id
-        )
-        
-        current_app.logger.info(f"Service returned - success: {success}")
-        current_app.logger.info(f"Context info: {context_info}")
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'response': response,
-                'context_info': context_info
-            }), 200
-        else:
-            return jsonify({'success': False, 'message': response}), 400
-            
-    except Exception as e:
-        current_app.logger.error(f"Error in enhanced chat: {str(e)}")
-        return jsonify({'success': False, 'message': 'Internal server error'}), 500
 
 @care_archive_bp.route('/conversation/<int:conversation_id>/context', methods=['GET'])
 @require_auth
@@ -302,10 +262,12 @@ def enhanced_chat():
 def get_conversation_context(conversation_id):
     """Get conversation with enhanced context"""
     try:
-        chat_service = EnhancedChatService()  # Create service locally
+        from app.services.care_archive_service import CareArchiveService
+        care_service = CareArchiveService()
         user_id = request.current_user['id']
         
-        conversation_data = chat_service.get_conversation_with_context(user_id, conversation_id)
+        # Get conversation data using care archive service
+        conversation_data = care_service.get_conversation_summary(user_id, conversation_id)
         
         if conversation_data:
             return jsonify({
@@ -325,10 +287,12 @@ def get_conversation_context(conversation_id):
 def get_care_summary():
     """Get comprehensive care summary for user"""
     try:
-        chat_service = EnhancedChatService()  # Create service locally
+        from app.services.care_archive_service import CareArchiveService
+        care_service = CareArchiveService()
         user_id = request.current_user['id']
         
-        summary = chat_service.get_user_care_summary(user_id)
+        # Get user's care summary using care archive service
+        summary = care_service.get_user_summary(user_id)
         
         return jsonify({
             'success': True,
@@ -345,10 +309,17 @@ def get_care_summary():
 def get_follow_up_suggestions(conversation_id):
     """Get follow-up question suggestions"""
     try:
-        chat_service = EnhancedChatService()  # Create service locally
+        from app.services.care_archive_service import CareArchiveService
+        care_service = CareArchiveService()
         user_id = request.current_user['id']
         
-        suggestions = chat_service.suggest_follow_up_questions(user_id, conversation_id)
+        # Generate simple follow-up suggestions
+        suggestions = [
+            "Tell me more about the symptoms",
+            "What treatments have been tried?",
+            "How is the recovery progressing?",
+            "Any changes in behavior?"
+        ]
         
         return jsonify({
             'success': True,
@@ -365,13 +336,16 @@ def get_follow_up_suggestions(conversation_id):
 def analyze_intent():
     """Analyze user query intent"""
     try:
-        chat_service = EnhancedChatService()  # Create service locally
+        from app.utils.intent_detector import IntentDetector
         data = request.json
+        user_id = request.current_user['id']
         
         if 'message' not in data:
             return jsonify({'success': False, 'message': 'Message is required'}), 400
         
-        intent_analysis = chat_service.analyze_user_query_intent(data['message'])
+        # Use intent detector utility
+        intent_detector = IntentDetector()
+        intent_analysis = intent_detector.detect_intent(data['message'])
         
         return jsonify({
             'success': True,
@@ -438,3 +412,55 @@ def backfill_knowledge_base():
             'message': 'Internal server error during backfill',
             'stats': {"total_processed": 0, "successful": 0, "failed": 0, "skipped": 0}
         }), 500 
+
+@care_archive_bp.route('/enhanced-chat', methods=['POST'])
+@require_auth
+@premium_required
+@require_health_credits
+@validate_json_content
+def enhanced_chat():
+    """Enhanced chat with health context - redirects to working enhanced chat service"""
+    try:
+        from app.services.enhanced_chat_service import EnhancedChatService
+        enhanced_chat_service = EnhancedChatService()
+        
+        user_id = request.current_user['id']
+        data = request.json
+        
+        current_app.logger.info("="*60)
+        current_app.logger.info("CARE ARCHIVE ENHANCED CHAT ENDPOINT CALLED")
+        current_app.logger.info(f"User ID: {user_id}")
+        current_app.logger.info(f"Request data: {data}")
+        current_app.logger.info("="*60)
+        
+        if 'message' not in data:
+            return jsonify({'success': False, 'message': 'Message is required'}), 400
+        
+        conversation_id = data.get('conversation_id')
+        thread_id = data.get('thread_id')
+        
+        current_app.logger.info(f"Extracted - conversation_id: {conversation_id}, thread_id: {thread_id}")
+        
+        # Generate contextual response using enhanced chat service
+        success, response, context_info = enhanced_chat_service.generate_contextual_response(
+            user_id=user_id,
+            message=data['message'], 
+            conversation_id=conversation_id,
+            thread_id=thread_id
+        )
+        
+        current_app.logger.info(f"Service returned - success: {success}")
+        current_app.logger.info(f"Context info: {context_info}")
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'response': response,
+                'context_info': context_info
+            }), 200
+        else:
+            return jsonify({'success': False, 'message': response}), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Error in enhanced chat: {str(e)}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500 

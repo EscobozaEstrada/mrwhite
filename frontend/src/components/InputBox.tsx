@@ -12,7 +12,7 @@ interface InputBoxProps {
 }
 
 export function InputBox({ inputValue, setInputValue, onSubmit, placeholder = "Write your message here ..." }: InputBoxProps) {
-  const [value, setValue] = useState<string>(inputValue);
+  const [internalValue, setInternalValue] = useState<string>(inputValue);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -23,16 +23,19 @@ export function InputBox({ inputValue, setInputValue, onSubmit, placeholder = "W
       textarea.style.height = `${newHeight}px`;
       textarea.dispatchEvent(new Event('resize', { bubbles: true }));
     }
-  }, [value]);
+  }, [internalValue]);
 
+  // Only update internal value when inputValue prop changes from parent
   useEffect(() => {
-    setValue(inputValue);
+    if (inputValue !== internalValue) {
+      setInternalValue(inputValue);
+    }
   }, [inputValue]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      console.log('Submitted:', value);
+      console.log('Submitted:', internalValue);
       onSubmit();
 
       if (textareaRef.current) {
@@ -42,14 +45,15 @@ export function InputBox({ inputValue, setInputValue, onSubmit, placeholder = "W
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value);
-    setInputValue(e.target.value);
+    const newValue = e.target.value;
+    setInternalValue(newValue);
+    setInputValue(newValue);
   };
 
   return (
     <Textarea
       ref={textareaRef}
-      value={value}
+      value={internalValue}
       onChange={handleChange}
       onKeyDown={handleKeyDown}
       placeholder={placeholder}

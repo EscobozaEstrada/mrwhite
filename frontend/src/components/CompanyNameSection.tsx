@@ -16,6 +16,7 @@ export default function CompanyNameSection({ companies }: CompanyNameSectionProp
   return (
     <section className="py-8 md:py-16 flex flex-col justify-center items-center">
       <motion.div 
+        layout
         className="flex gap-[10px] flex-wrap justify-center px-4"
         initial="hidden"
         whileInView="visible"
@@ -31,6 +32,7 @@ export default function CompanyNameSection({ companies }: CompanyNameSectionProp
         {companies.map((company, index) => (
           <motion.div 
             key={index} 
+            layout
             className="w-[320px] h-[120px] relative"
             variants={{
               hidden: { opacity: 0, y: 20 },

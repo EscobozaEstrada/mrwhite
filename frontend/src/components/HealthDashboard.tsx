@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 import {
     Calendar,
     Heart,
@@ -25,6 +25,9 @@ import {
     DollarSign,
     Shield
 } from 'lucide-react';
+import { getHealthRecords, getHealthSummary, sendHealthChat, FASTAPI_BASE_URL } from '@/utils/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // Types
 interface HealthRecord {
@@ -113,37 +116,23 @@ const HealthDashboard: React.FC = () => {
             setLoading(true);
             setError(null);
 
-            // Load all health data in parallel
-            const [records, reminders, insights, summary] = await Promise.all([
-                fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/records`, {
-                    credentials: 'include'
-                }),
-                fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/reminders`, {
-                    credentials: 'include'
-                }),
-                fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/insights`, {
-                    credentials: 'include'
-                }),
-                fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/summary`, {
-                    credentials: 'include'
-                })
-            ]);
-
-            if (!records.ok || !reminders.ok || !insights.ok || !summary.ok) {
-                throw new Error('Failed to load health data');
-            }
-
+            // Load all health data in parallel using FastAPI utility functions
             const [recordsData, remindersData, insightsData, summaryData] = await Promise.all([
-                records.json(),
-                reminders.json(),
-                insights.json(),
-                summary.json()
+                getHealthRecords(),
+                fetch(`${FASTAPI_BASE_URL}/api/health/reminders`, {
+                    credentials: 'include'
+                }).then(res => res.json()),
+                fetch(`${FASTAPI_BASE_URL}/api/health/insights`, {
+                    credentials: 'include'
+                }).then(res => res.json()),
+                getHealthSummary()
             ]);
 
-            setHealthRecords(recordsData.records || []);
-            setReminders(remindersData.reminders || []);
-            setInsights(insightsData.insights || []);
-            setSummary(summaryData.summary || null);
+            // Handle FastAPI response format
+            setHealthRecords(recordsData.success ? recordsData.records || [] : []);
+            setReminders(remindersData.success ? remindersData.reminders || [] : []);
+            setInsights(insightsData.success ? insightsData.insights || [] : []);
+            setSummary(summaryData.success ? summaryData.summary || null : null);
 
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load health data');
@@ -160,7 +149,7 @@ const HealthDashboard: React.FC = () => {
         }
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/records?search=${encodeURIComponent(searchQuery)}`, {
+            const response = await fetch(`${FASTAPI_BASE_URL}/api/health/records?search=${encodeURIComponent(searchQuery)}`, {
                 credentials: 'include'
             });
 
@@ -183,22 +172,9 @@ const HealthDashboard: React.FC = () => {
         setChatLoading(true);
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    message: userMessage,
-                    context: 'health_dashboard'
-                })
-            });
-
-            if (!response.ok) throw new Error('Chat request failed');
-
-            const data = await response.json();
-            setChatHistory(prev => [...prev, { role: 'assistant', content: data.response }]);
+            // Use FastAPI health chat utility
+            const data = await sendHealthChat(userMessage);
+            setChatHistory(prev => [...prev, { role: 'assistant', content: data.content || data.response }]);
         } catch (err) {
             setChatHistory(prev => [...prev, {
                 role: 'assistant',
@@ -237,7 +213,7 @@ const HealthDashboard: React.FC = () => {
 
     const generateInsights = async () => {
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/health/insights/generate`, {
+            const response = await fetch(`${FASTAPI_BASE_URL}/api/health/insights/generate`, {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -301,11 +277,15 @@ const HealthDashboard: React.FC = () => {
 
     if (error) {
         return (
-            <Alert className="m-4">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <Card className="m-4 border-red-200 bg-red-50">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-red-700">
+                        <AlertTriangle className="h-4 w-4" />
+                        Error
+                    </CardTitle>
+                    <CardDescription className="text-red-600">{error}</CardDescription>
+                </CardHeader>
+            </Card>
         );
     }
 
@@ -616,7 +596,30 @@ const HealthDashboard: React.FC = () => {
                                                     : 'bg-gray-100 text-gray-900'
                                                     }`}
                                             >
-                                                {message.content}
+                                                {message.role === 'assistant' ? (
+                                                    <div className="markdown-content">
+                                                        <ReactMarkdown 
+                                                            remarkPlugins={[remarkGfm]}
+                                                            components={{
+                                                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                                                strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                                                                em: ({node, ...props}) => <em className="italic" {...props} />,
+                                                                code: ({node, className, inline, ...props}: any) => 
+                                                                    inline 
+                                                                        ? <code className="bg-gray-200 px-1 py-0.5 rounded text-sm" {...props} />
+                                                                        : <code className="block bg-gray-200 p-2 rounded my-2 overflow-x-auto text-sm" {...props} />,
+                                                                ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-2" {...props} />,
+                                                                ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-2" {...props} />,
+                                                                li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                                                                a: ({node, ...props}) => <a className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                                                            }}
+                                                        >
+                                                            {message.content}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                ) : (
+                                                    message.content
+                                                )}
                                             </div>
                                         </div>
                                     ))

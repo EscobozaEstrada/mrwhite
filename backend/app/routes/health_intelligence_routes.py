@@ -34,39 +34,7 @@ def get_health_dashboard():
     except Exception as e:
         return jsonify(error_response(message="Failed to retrieve health dashboard data", error=str(e))), 500
 
-@health_intelligence_bp.route('/chat', methods=['POST'])
-@require_auth
-def health_chat():
-    """Process health-related chat queries using LangGraph AI agent"""
-    try:
-        current_user_id = request.current_user['id']
-        data = request.get_json()
-        
-        if not data or 'query' not in data:
-            return jsonify(error_response(message="Query is required")), 400
-        
-        query = data['query']
-        thread_id = data.get('thread_id')
-        
-        # Process health query asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        try:
-            result = loop.run_until_complete(
-                health_service.process_health_query(
-                    user_id=current_user_id,
-                    query=query,
-                    thread_id=thread_id
-                )
-            )
-        finally:
-            loop.close()
-        
-        return jsonify(success_response(data=result, message="Health query processed successfully"))
-        
-    except Exception as e:
-        return jsonify(error_response(message="Failed to process health query", error=str(e))), 500
+
 
 @health_intelligence_bp.route('/analyze', methods=['POST'])
 @require_auth

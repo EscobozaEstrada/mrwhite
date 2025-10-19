@@ -177,7 +177,7 @@ class FollowupNotificationService:
             overdue_hours = int((now - due_datetime).total_seconds() / 3600)
             
             # Create completion URL
-            completion_url = f"{current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/reminder/complete/{reminder.id}?token={completion_token}"
+            completion_url = f"{current_app.config.get('FRONTEND_URL')}/reminder/complete/{reminder.id}?token={completion_token}"
             
             # Email subject
             subject = f"⏰ Follow-up #{reminder.current_followup_count}: {reminder.title} - Still Pending"
@@ -287,7 +287,7 @@ class FollowupNotificationService:
                 <p style="color: #666; font-size: 14px; margin-top: 30px;">
                     Click the button above to mark this reminder as completed and stop receiving follow-up notifications.
                     You can also complete this reminder from your 
-                    <a href="{current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/reminders">dashboard</a>.
+                    <a href="{current_app.config.get('FRONTEND_URL')}/reminders">dashboard</a>.
                 </p>
                 
                 <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">

@@ -29,6 +29,9 @@ class UserImage(db.Model):
     # Image metadata
     image_metadata = Column(JSON)  # Width, height, format, file size, EXIF, etc.
     
+    # Display order for gallery
+    display_order = Column(Integer, default=0, nullable=False)
+    
     # Chat context (optional)
     conversation_id = Column(Integer, ForeignKey('conversations.id'), nullable=True, index=True)
     message_id = Column(Integer, ForeignKey('messages.id'), nullable=True, index=True)
@@ -56,7 +59,7 @@ class UserImage(db.Model):
             image_url = stored_url
         elif stored_url.startswith('/uploads/images/'):
             # Local path - generate full backend URL
-            backend_url = os.getenv('BACKEND_BASE_URL', 'http://localhost:5001')
+            backend_url = os.getenv('BACKEND_BASE_URL')
             image_url = f"{backend_url}{stored_url}"
         else:
             # Fallback
@@ -77,7 +80,8 @@ class UserImage(db.Model):
             'file_size': self.image_metadata.get('file_size', 0) if self.image_metadata else 0,
             'width': self.image_metadata.get('width', 0) if self.image_metadata else 0,
             'height': self.image_metadata.get('height', 0) if self.image_metadata else 0,
-            'format': self.image_metadata.get('format', '') if self.image_metadata else ''
+            'format': self.image_metadata.get('format', '') if self.image_metadata else '',
+            'display_order': self.display_order
         }
     
     def to_gallery_dict(self):
@@ -89,7 +93,7 @@ class UserImage(db.Model):
             image_url = stored_url
         elif stored_url.startswith('/uploads/images/'):
             # Local path - generate full backend URL
-            backend_url = os.getenv('BACKEND_BASE_URL', 'http://localhost:5001')
+            backend_url = os.getenv('BACKEND_BASE_URL')
             image_url = f"{backend_url}{stored_url}"
         else:
             # Fallback
@@ -103,7 +107,8 @@ class UserImage(db.Model):
             'uploaded_at': self.created_at.isoformat() if self.created_at else None,
             'file_size': self.image_metadata.get('file_size', 0) if self.image_metadata else 0,
             'width': self.image_metadata.get('width', 0) if self.image_metadata else 0,
-            'height': self.image_metadata.get('height', 0) if self.image_metadata else 0
+            'height': self.image_metadata.get('height', 0) if self.image_metadata else 0,
+            'display_order': self.display_order
         }
     
     @staticmethod
@@ -113,16 +118,48 @@ class UserImage(db.Model):
             user_id=user_id,
             is_deleted=False
         ).order_by(
-            UserImage.created_at.desc()
+            UserImage.display_order.asc(),  # Primary sort by display_order
+            UserImage.created_at.desc()     # Secondary sort by creation date
         ).limit(limit).offset(offset).all()
     
     @staticmethod
     def get_user_image_count(user_id: int) -> int:
-        """Get total count of user's images"""
-        return UserImage.query.filter_by(
-            user_id=user_id,
-            is_deleted=False
-        ).count()
+        """Get total count of user's images (includes IC images)"""
+        try:
+            # Count user_images
+            user_images_count = UserImage.query.filter_by(
+                user_id=user_id,
+                is_deleted=False
+            ).count()
+            
+            # Count IC images that haven't been synced
+            from sqlalchemy import text
+            ic_count_query = text("""
+                SELECT COUNT(*) FROM ic_documents
+                WHERE user_id = :user_id
+                  AND file_type IN ('jpg', 'jpeg', 'png', 'gif', 'webp', 'image')
+                  AND is_deleted = false
+                  AND s3_url IS NOT NULL
+                  AND s3_url != ''
+                  AND NOT EXISTS (
+                      SELECT 1 FROM user_images 
+                      WHERE user_images.user_id = :user_id 
+                        AND user_images.s3_url = ic_documents.s3_url
+                        AND user_images.is_deleted = false
+                  )
+            """)
+            
+            ic_count_result = db.session.execute(ic_count_query, {'user_id': user_id})
+            ic_count = ic_count_result.scalar()
+            
+            return user_images_count + ic_count
+            
+        except Exception as e:
+            # Fallback to original count if IC query fails
+            return UserImage.query.filter_by(
+                user_id=user_id,
+                is_deleted=False
+            ).count()
     
     @staticmethod
     def search_user_images(user_id: int, search_term: str, limit: int = 20):
@@ -135,5 +172,6 @@ class UserImage(db.Model):
                 UserImage.original_filename.ilike(f'%{search_term}%')
             )
         ).order_by(
-            UserImage.created_at.desc()
+            UserImage.display_order.asc(),  # Primary sort by display_order
+            UserImage.created_at.desc()     # Secondary sort by creation date
         ).limit(limit).all() 

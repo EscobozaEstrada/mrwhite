@@ -1,31 +1,22 @@
 'use client'
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-	FiSend,
-	FiBookmark,
-	FiClock,
 	FiX,
-	FiPaperclip,
 	FiMoreVertical,
 	FiTrash2,
 	FiEdit,
 	FiSearch,
-	FiTrash,
+	FiSave,
 } from 'react-icons/fi';
-import { Button } from '@/components/ui/button';
-import { PiBookmarkBold, PiGlobeHemisphereWestBold, PiInfo, PiBookmarkFill } from 'react-icons/pi';
-import { RiVoiceprintFill } from "react-icons/ri";
-import { FaPlus } from "react-icons/fa6";
-import { InputBox } from '@/components/InputBox';
+import { PiBookmarkFill } from 'react-icons/pi';
+import { AiOutlineLoading } from "react-icons/ai";
 import Message from '@/components/Message';
 import MessageLoader from '@/components/MessageLoader';
 import axios from 'axios';
 import UploadModal from '@/components/UploadModal';
-import SelectedFiles from '@/components/SelectedFiles';
 import Sidebar from '@/components/Sidebar';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { IoImageOutline } from 'react-icons/io5';
 // Import our new components and utilities
 import HeroSection from '@/components/HeroSection';
 import ChatHeader from '@/components/ChatHeader';
@@ -35,7 +26,10 @@ import {
 	fetchBookmarks as fetchBookmarksApi,
 	toggleConversationBookmark as toggleBookmarkApi,
 	createNewConversation as createNewConversationApi,
-	loadConversationMessages as loadConversationMessagesApi
+	loadConversationMessages as loadConversationMessagesApi,
+	sendChatMessage,
+	sendHealthMessage,
+	FASTAPI_BASE_URL
 } from '@/utils/api';
 import {
 	copyToClipboard,
@@ -45,32 +39,31 @@ import {
 	retryAiMessage
 } from '@/utils/messageUtils';
 import { Heart } from 'lucide-react';
-import { EnhancedChatResponse } from '@/types/care-archive';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import BookGeneratorSidebar from '@/components/BookGeneratorSidebar';
+import BookCreationModal from '@/components/BookCreationModal';
+import EnhancedBookCreationModal from '@/components/EnhancedBookCreationModal';
 import { UsageTracker } from '@/components/UsageTracker';
 import { PremiumGate } from '@/components/PremiumGate';
 import { CreditTracker } from '@/components/CreditTracker';
-import { ArrowLeft, Menu } from 'lucide-react';
-import Image from 'next/image';
-import { BsBookmarkFill, BsFillBookmarkCheckFill, BsFillBookmarkXFill } from 'react-icons/bs';
+import { BsBookmarkFill, BsFillBookmarkCheckFill } from 'react-icons/bs';
+import toast from '@/components/ui/sound-toast';
 
 interface Message {
 	id: string;
 	content: string;
 	type: 'user' | 'ai';
-	timestamp: Date;
+	timestamp: string;
 	liked?: boolean;
 	disliked?: boolean;
 	attachments?: Array<{
-		type: 'image' | 'file';
+		type: 'image' | 'file' | 'audio';
 		url: string;
 		name: string;
 	}>;
 }
 
 interface Bookmark extends Message {
-	bookmarkedAt: Date;
+	bookmarkedAt: string;
 }
 
 interface ConversationItem {
@@ -91,8 +84,10 @@ interface SidePanelProps {
 
 interface SelectedFile {
 	file: File;
-	type: 'file' | 'image';
+	type: 'file' | 'image' | 'audio';
 	previewUrl?: string;
+	description?: string;
+	s3Url?: string;
 }
 
 interface Conversation {
@@ -106,6 +101,16 @@ const TalkPage = () => {
 	const [inputValue, setInputValue] = useState('');
 	const [isTyping, setIsTyping] = useState(false);
 	const [showHistory, setShowHistory] = useState(false);
+	
+	// Counter to ensure unique IDs even in rapid succession
+	const messageIdCounter = useRef(0);
+	
+	// Function to generate unique message IDs
+	const generateUniqueId = useCallback(() => {
+		messageIdCounter.current += 1;
+		return `${Date.now()}-${messageIdCounter.current}`;
+	}, []);
+	
 	const [showBookmarks, setShowBookmarks] = useState(false);
 	const [uploadType, setUploadType] = useState<'file' | 'image'>('file');
 	const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -118,12 +123,13 @@ const TalkPage = () => {
 	const [newTitle, setNewTitle] = useState<string>('');
 	const [searchQuery, setSearchQuery] = useState<string>('');
 	const [filteredHistory, setFilteredHistory] = useState<HistoryDay[]>([]);
-	const [currentBgIndex, setCurrentBgIndex] = useState(0);
+	const [isSaving, setIsSaving] = useState<string | null>(null);
 	const [isHealthMode, setIsHealthMode] = useState(false);
 	const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
 	const [conversation, setConversation] = useState<Conversation | null>(null);
 	const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-	const [isBookGeneratorOpen, setIsBookGeneratorOpen] = useState(false);
+	const [isBookCreationModalOpen, setIsBookCreationModalOpen] = useState(false);
+	const [isEnhancedBookModalOpen, setIsEnhancedBookModalOpen] = useState(false);
 	const [usageStats, setUsageStats] = useState<any>(null);
 	const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 	const [isCreditTrackerVisible, setIsCreditTrackerVisible] = useState(false);
@@ -139,9 +145,17 @@ const TalkPage = () => {
 
 	// Initialize conversation ID state
 	useEffect(() => {
+		console.log('🔄 URL changed - conversationId:', conversationId);
+		console.log('🔍 CONVERSATION STATE DEBUG:', {
+			conversationId,
+			currentConversationId,
+			timestamp: new Date().toISOString()
+		});
 		if (conversationId && conversationId !== 'new-chat') {
+			console.log('📝 Setting currentConversationId to:', conversationId);
 			setCurrentConversationId(conversationId);
 		} else {
+			console.log('🆕 Resetting currentConversationId to null (new-chat mode)');
 			setCurrentConversationId(null);
 		}
 	}, [conversationId]);
@@ -158,18 +172,30 @@ const TalkPage = () => {
 
 	// Create a new conversation if needed
 	const createNewConversation = async () => {
+		console.log('🚨 CRITICAL: createNewConversation() called!', {
+			timestamp: new Date().toISOString(),
+			stackTrace: new Error().stack,
+			currentUrl: window.location.pathname,
+			conversationId: conversationId,
+			currentConversationId: currentConversationId,
+			user: user?.id
+		});
+		
 		try {
 			// Check if the user is authenticated
 			if (!user) {
+				console.log('❌ User not authenticated, redirecting to login');
 				router.push('/login');
 				return null;
 			}
 
+			console.log('🔄 About to call createNewConversationApi...');
 			// Use our utility function
 			const newId = await createNewConversationApi();
+			console.log('✅ New conversation created:', newId);
 			return newId;
 		} catch (error: any) {
-			console.error('Error creating new conversation:', error);
+			console.error('❌ Error creating new conversation:', error);
 
 			if (error.response && error.response.status === 401) {
 				router.push('/login');
@@ -196,21 +222,31 @@ const TalkPage = () => {
 		}
 	}, [user, router]);
 
-	// Background image carousel effect
+	// CRITICAL DEBUG: Track all URL changes and navigation
 	useEffect(() => {
-		const bgImages = [
-			'/assets/talk-hero.webp',
-			'/assets/talk-hero-1.webp',
-			'/assets/talk-hero-2.webp',
-			'/assets/talk-hero-3.webp'
-		];
+		const handlePopState = (event: PopStateEvent) => {
+			console.log('🔄 BROWSER NAVIGATION DETECTED:', {
+				timestamp: new Date().toISOString(),
+				newUrl: window.location.pathname,
+				conversationId: conversationId,
+				currentConversationId: currentConversationId,
+				event: event
+			});
+		};
 
-		const interval = setInterval(() => {
-			setCurrentBgIndex(prevIndex => (prevIndex + 1) % bgImages.length);
-		}, 5001); // Change image every 5 seconds
+		window.addEventListener('popstate', handlePopState);
+		
+		// Log current URL state
+		console.log('🌐 URL STATE MONITOR ACTIVE:', {
+			currentUrl: window.location.pathname,
+			conversationId: conversationId,
+			currentConversationId: currentConversationId
+		});
 
-		return () => clearInterval(interval);
-	}, []);
+		return () => {
+			window.removeEventListener('popstate', handlePopState);
+		};
+	}, [conversationId, currentConversationId]);
 
 	// Add this effect for auto-sliding on page load
 	useEffect(() => {
@@ -246,28 +282,65 @@ const TalkPage = () => {
 			return;
 		}
 
-		// Get or create conversation ID
-		let workingConversationId = currentConversationId || conversationId;
+		
+		
+		let workingConversationId = conversationId === 'new-chat' ? 'new-chat' : (currentConversationId || conversationId);
 		let isNewConversation = false;
-		if (workingConversationId === 'new-chat' || !workingConversationId) {
+		console.log('🔍 Conversation setup - currentConversationId:', currentConversationId, 'URL conversationId:', conversationId, 'workingConversationId:', workingConversationId);
+		console.log('🚨 CRITICAL DEBUG - Message send triggered:', {
+			timestamp: new Date().toISOString(),
+			urlConversationId: conversationId,
+			currentConversationId: currentConversationId,
+			workingConversationId: workingConversationId,
+			isNewChatMode: conversationId === 'new-chat',
+			willCreateNewConversation: workingConversationId === 'new-chat'
+		});
+		
+		
+		// Do NOT create new conversations for existing conversation IDs
+		if (workingConversationId === 'new-chat') {
+			console.log('🆕 Creating new conversation (new-chat mode)...');
 			const newId = await createNewConversation();
-			if (!newId) return; // Failed to create conversation
-			workingConversationId = newId;
-			setCurrentConversationId(newId); // Update state immediately
-			isNewConversation = true;
+			if (!newId) {
+				console.log('⚠️ Upfront conversation creation failed, backend will create it during message processing');
+			} else {
+				workingConversationId = newId;
+				setCurrentConversationId(newId); // Update state immediately
+				isNewConversation = true;
+				console.log('✅ Upfront conversation created:', newId, 'isNewConversation:', isNewConversation);
+			}
+		} else {
+			// For existing conversations, ensure state is synchronized
+			if (conversationId && conversationId !== 'new-chat' && conversationId !== currentConversationId) {
+				console.log('📌 Synchronizing existing conversation:', conversationId);
+				setCurrentConversationId(conversationId);
+				workingConversationId = conversationId;
+			}
 		}
 
-		const attachments = selectedFiles.map(file => ({
-			type: file.type,
-			url: file.previewUrl || URL.createObjectURL(file.file),
-			name: file.file.name
-		}));
+		const attachments = selectedFiles.map(file => {
+			// For audio files with S3 URLs, use that URL directly
+			if (file.type === 'audio' && file.s3Url) {
+				return {
+					type: file.type,
+					url: file.s3Url,
+					name: file.file.name
+				};
+			}
+
+			// For other files, use the previewUrl or create a blob URL
+			return {
+				type: file.type,
+				url: file.previewUrl || URL.createObjectURL(file.file),
+				name: file.file.name
+			};
+		});
 
 		const userMessage: Message = {
-			id: Date.now().toString(),
+			id: generateUniqueId(),
 			type: 'user',
 			content: inputValue.trim(),
-			timestamp: new Date(),
+			timestamp: new Date().toISOString(),
 			attachments: attachments.length > 0 ? attachments : undefined
 		};
 
@@ -278,6 +351,8 @@ const TalkPage = () => {
 		setMessages(prev => [...prev, userMessage]);
 		setInputValue('');
 		setSelectedFiles([]);
+
+		// Show typing indicator
 		setIsTyping(true);
 
 		// Scroll to bottom to show the loader
@@ -300,69 +375,127 @@ const TalkPage = () => {
 
 			if (isHealthMode) {
 				// Track health mode usage for analytics
-				// Use health service for enhanced context-aware responses
-				const healthResponse = await axios.post<EnhancedChatResponse>(
-					`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/care-archive/enhanced-chat`,
-					{
-						message: messageForAI,
-						conversation_id: workingConversationId !== 'new-chat' ? parseInt(workingConversationId) : undefined,
-						thread_id: workingConversationId
-					},
-					{
-						withCredentials: true
-					}
-				);
-
-				if (healthResponse.data.success) {
-					const aiResponse: Message = {
-						id: healthResponse.data.context_info?.conversation_id?.toString() || Date.now().toString(),
-						type: 'ai',
-						content: healthResponse.data.response,
-						timestamp: new Date()
-					};
-
-					setMessages(prev => [...prev, aiResponse]);
-					response = healthResponse;
-
-					// Update conversation ID from response if we got a new one
-					if (healthResponse.data.context_info?.conversation_id && !currentConversationId) {
-						const newConvId = healthResponse.data.context_info.conversation_id.toString();
-						setCurrentConversationId(newConvId);
-						workingConversationId = newConvId;
-					}
-
-					// Trigger credit refresh since credits were consumed
-					triggerCreditRefresh();
-				} else {
-					throw new Error('Health service failed to process request');
-				}
-			} else {
-				// Use regular chat service
-				const formData = new FormData();
-				formData.append('message', messageForAI);
-				formData.append('context', attachments.length > 0 ? 'file_upload' : 'chat');
-				formData.append('conversationId', workingConversationId);
-				selectedFiles.forEach(file => formData.append('attachments', file.file));
-
-				response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/chat`, formData, {
-					withCredentials: true
+				// Use FastAPI talk service with health context
+				const files = selectedFiles.map(file => file.file);
+				
+				// DEBUG: Log conversation ID before sending to backend (health)
+				const conversationIdToSend = workingConversationId !== 'new-chat' ? parseInt(workingConversationId) : undefined;
+				console.log('🔍 SENDING TO BACKEND (HEALTH):', {
+					messageForAI: messageForAI.substring(0, 50) + '...',
+					workingConversationId,
+					conversationIdToSend,
+					currentConversationId,
+					urlConversationId: conversationId
 				});
 
-				const aiResponse: Message = {
-					id: response.data.aiMessageId.toString(),
-					type: 'ai',
-					content: response.data.response,
-					timestamp: new Date()
-				};
+				response = await sendHealthMessage(
+					messageForAI,
+					conversationIdToSend,
+					{}, // health context can be added here if needed
+					files.length > 0 ? files : undefined
+				);
 
-				// Update the user message ID with the one from the database
-				setMessages(prev => prev.map(msg =>
-					msg.id === userMessage.id
-						? { ...msg, id: response.data.userMessageId.toString() }
-						: msg
-				));
+				// Handle FastAPI response (same as normal mode)
+				if (response.data && response.data.success) {
+					// FastAPI returns content field for the AI response
+					const responseContent = response.data.content || response.data.response;
 
-				setMessages(prev => [...prev, aiResponse]);
+					if (responseContent) {
+						const aiResponse: Message = {
+							id: response.data.message_id?.toString() || generateUniqueId(),
+							type: 'ai',
+							content: responseContent,
+							timestamp: new Date().toISOString()
+						};
+
+						setMessages(prev => [...prev, aiResponse]);
+
+						// FIX: Always sync with backend conversation ID for consistency
+						if (response.data.conversation_id) {
+							const backendConversationId = response.data.conversation_id.toString();
+							console.log('📥 Backend provided conversation_id (health):', backendConversationId, 'Current URL param:', conversationId, 'Working ID:', workingConversationId);
+							
+							// Always update state to match backend
+							setCurrentConversationId(backendConversationId);
+							
+							// Only trigger URL update if we're transitioning from new-chat
+							if (conversationId === 'new-chat' && backendConversationId !== conversationId) {
+								isNewConversation = true;
+								workingConversationId = backendConversationId;
+								console.log('🔄 Set isNewConversation=true to trigger URL update from new-chat to:', backendConversationId);
+							}
+						}
+
+						// Handle special reminder actions if present
+						if (response.data.ai_agent_action === 'reminder_created') {
+							console.log('✅ Reminder created:', response.data.reminder_info);
+						} else if (response.data.ai_agent_action === 'reminder_failed') {
+							console.log('❌ Reminder creation failed:', response.data.error);
+						}
+					}
+				}
+
+				// Trigger credit refresh since credits were consumed
+				triggerCreditRefresh();
+			} else {
+				// Use FastAPI regular chat service
+				const files = selectedFiles.map(file => file.file);
+
+				// DEBUG: Log conversation ID before sending to backend
+				const conversationIdToSend = workingConversationId !== 'new-chat' ? parseInt(workingConversationId) : undefined;
+				console.log('🔍 SENDING TO BACKEND:', {
+					messageForAI: messageForAI.substring(0, 50) + '...',
+					workingConversationId,
+					conversationIdToSend,
+					currentConversationId,
+					urlConversationId: conversationId
+				});
+
+				response = await sendChatMessage(
+					messageForAI,
+					conversationIdToSend,
+					files.length > 0 ? files : undefined
+				);
+
+				// Handle FastAPI response
+				if (response.data && response.data.success) {
+					// FastAPI returns content field for the AI response
+					const responseContent = response.data.content || response.data.response;
+
+					if (responseContent) {
+						const aiResponse: Message = {
+							id: response.data.message_id?.toString() || generateUniqueId(),
+							type: 'ai',
+							content: responseContent,
+							timestamp: new Date().toISOString()
+						};
+
+						setMessages(prev => [...prev, aiResponse]);
+
+						//  FIX: Always sync with backend conversation ID for consistency
+						if (response.data.conversation_id) {
+							const backendConversationId = response.data.conversation_id.toString();
+							console.log('📥 Backend provided conversation_id:', backendConversationId, 'Current URL param:', conversationId, 'Working ID:', workingConversationId);
+							
+							// Always update state to match backend
+							setCurrentConversationId(backendConversationId);
+							
+							// Only trigger URL update if we're transitioning from new-chat
+							if (conversationId === 'new-chat' && backendConversationId !== conversationId) {
+								isNewConversation = true;
+								workingConversationId = backendConversationId;
+								console.log('🔄 Set isNewConversation=true to trigger URL update from new-chat to:', backendConversationId);
+							}
+						}
+
+						// Handle special reminder actions if present
+						if (response.data.ai_agent_action === 'reminder_created') {
+							console.log('✅ Reminder created:', response.data.reminder_info);
+						} else if (response.data.ai_agent_action === 'reminder_failed') {
+							console.log('❌ Reminder creation failed:', response.data.error);
+						}
+					}
+				}
 
 				// Trigger credit refresh since credits were consumed
 				triggerCreditRefresh();
@@ -370,31 +503,27 @@ const TalkPage = () => {
 
 			setIsTyping(false);
 
-			// Scroll to bottom again to show the new message
-			setTimeout(() => {
-				scrollToBottom();
-			}, 0);
-
 			if (isNewConversation) {
-
-				window.history.replaceState(
-					{},
-					'',
-					`/talk/conversation/${workingConversationId}`
-				);
+				console.log('🔥 URL Update: Transitioning from new-chat to conversation', workingConversationId);
+				
+				// CRITICAL FIX: Use Next.js router instead of window.history to properly update route parameters
+				router.replace(`/talk/conversation/${workingConversationId}`);
+				
+				console.log('✅ URL Update: Successfully updated to', `/talk/conversation/${workingConversationId}`);
+			} else {
+				console.log('⚠️ URL Update: Skipped (isNewConversation is false)');
 			}
 
 			// Refresh usage stats after sending
 			await fetchUsageStats()
 		} catch (error) {
-			console.error('Error fetching AI response:', error);
 			setIsTyping(false);
 
 			// Show error message based on error type
 			if (axios.isAxiosError(error) && error.response?.status === 401) {
 				router.push('/login');
 			} else if (axios.isAxiosError(error) && error.response?.status === 402) {
-				// Credit-related error (Payment Required)
+				// Credit-related error (Payment Required) - Don't log as console error since this is expected behavior
 				const errorData = error.response.data;
 				let creditErrorMessage = "Insufficient credits to continue.";
 
@@ -404,10 +533,10 @@ const TalkPage = () => {
 
 				// Add credit error message to chat with upgrade/purchase options
 				const aiErrorMessage: Message = {
-					id: Date.now().toString(),
+					id: generateUniqueId(),
 					type: 'ai',
 					content: creditErrorMessage,
-					timestamp: new Date()
+					timestamp: new Date().toISOString()
 				};
 
 				setMessages(prev => [...prev, aiErrorMessage]);
@@ -424,14 +553,17 @@ const TalkPage = () => {
 				}
 
 				const aiErrorMessage: Message = {
-					id: Date.now().toString(),
+					id: generateUniqueId(),
 					type: 'ai',
 					content: upgradeMessage,
-					timestamp: new Date()
+					timestamp: new Date().toISOString()
 				};
 
 				setMessages(prev => [...prev, aiErrorMessage]);
 			} else {
+				// Log unexpected errors to console for debugging
+				console.error('Error fetching AI response:', error);
+				
 				// Add generic error message to chat based on mode
 				let errorMessage = "Error sending message. Please try again.";
 				if (isHealthMode) {
@@ -439,10 +571,10 @@ const TalkPage = () => {
 				}
 
 				const aiErrorMessage: Message = {
-					id: Date.now().toString(),
+					id: generateUniqueId(),
 					type: 'ai',
 					content: errorMessage,
-					timestamp: new Date()
+					timestamp: new Date().toISOString()
 				};
 
 				setMessages(prev => [...prev, aiErrorMessage]);
@@ -507,7 +639,7 @@ const TalkPage = () => {
 			if (error.response?.status === 401) {
 				router.push('/login');
 			} else {
-				alert('Failed to load bookmarks. Please try again.');
+				toast.error('Failed to load bookmarks. Please try again.');
 			}
 		}
 	};
@@ -527,12 +659,29 @@ const TalkPage = () => {
 			// Update UI immediately for better user experience
 			setMessages(messages.map(msg =>
 				msg.id === messageId
-					? { ...msg, liked: isLike, disliked: !isLike && msg.disliked }
+					? { 
+						...msg, 
+						liked: isLike ? true : false, 
+						disliked: isLike ? false : true 
+					}
 					: msg
 			));
 
-			// Use our utility function
-			await handleMessageReaction(messageId, isLike);
+			// Use our utility function and get updated message data
+			const updatedMessage = await handleMessageReaction(messageId, isLike);
+
+			// Update the message with the server response data to ensure consistency
+			if (updatedMessage && updatedMessage.reaction) {
+				setMessages(messages.map(msg =>
+					msg.id === messageId
+						? {
+							...msg,
+							liked: updatedMessage.reaction.liked,
+							disliked: updatedMessage.reaction.disliked
+						}
+						: msg
+				));
+			}
 		} catch (error: any) {
 			console.error('Error saving reaction:', error);
 
@@ -562,7 +711,7 @@ const TalkPage = () => {
 			// Add to local bookmarks
 			const bookmark: Bookmark = {
 				...message,
-				bookmarkedAt: new Date()
+				bookmarkedAt: new Date().toISOString()
 			};
 			setBookmarks(prev => [...prev, bookmark]);
 
@@ -617,6 +766,9 @@ const TalkPage = () => {
 					: msg
 			));
 			setIsTyping(false);
+			
+			// Trigger credit refresh since credits were consumed for retry
+			triggerCreditRefresh();
 		} catch (error) {
 			console.error('Error retrying message:', error);
 
@@ -628,18 +780,83 @@ const TalkPage = () => {
 			));
 			setIsTyping(false);
 
-			// Show error message
-			if (axios.isAxiosError(error) && error.response?.status === 401) {
-				router.push('/login');
+			// Handle different error types
+			if (axios.isAxiosError(error)) {
+				if (error.response?.status === 401) {
+					router.push('/login');
+				} else if (error.response?.status === 402) {
+					// Credit-related error - credits might have been checked but not deducted
+					// Refresh credits to show current state
+					triggerCreditRefresh();
+				} else if (error.response?.status !== 402 && error.response?.status !== 401) {
+					// For other errors that might have occurred after credit deduction,
+					// refresh credits to ensure UI is in sync
+					triggerCreditRefresh();
+				}
 			}
 		}
 	};
 
-	const handleFileUpload = (files: File[]) => {
-		const newFiles: SelectedFile[] = files.map(file => ({
+	// Define allowed file types
+	const IMAGE_TYPES = [
+		'image/jpeg', 
+		'image/jpg', 
+		'image/png', 
+		'image/gif', 
+		'image/webp',
+		'image/svg+xml'
+	];
+	
+	const TEXT_BASED_TYPES = [
+		'text/plain',
+		'application/pdf',
+		'application/msword',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'application/rtf',
+		'text/markdown',
+		'text/csv',
+		'application/json',
+		'application/xml',
+		'text/xml',
+		'text/html'
+	];
+	
+	// Maximum number of files allowed
+	const MAX_FILES = 5;
+	
+	const handleFileUpload = (files: File[], imageDescriptions?: Record<string, string>) => {
+		// Check if adding these files would exceed the maximum
+		if (selectedFiles.length >= MAX_FILES) {
+			toast.error(`You can only upload a maximum of ${MAX_FILES} files at once.`);
+			return;
+		}
+		
+		// Filter to only allow image and text-based files
+		const validFiles = files.filter(file => 
+			IMAGE_TYPES.includes(file.type) || TEXT_BASED_TYPES.includes(file.type)
+		);
+		
+		// Show error if some files were filtered out due to type
+		if (validFiles.length < files.length) {
+			toast.error('Some files were not added. Only image and text-based files are allowed.');
+		}
+		
+		// Enforce the maximum file limit
+		const availableSlots = MAX_FILES - selectedFiles.length;
+		const filesToAdd = validFiles.slice(0, availableSlots);
+		
+		// Show warning if some files were cut off due to the limit
+		if (filesToAdd.length < validFiles.length) {
+			toast.error(`Only ${availableSlots} more files could be added due to the ${MAX_FILES} file limit.`);
+		}
+		
+		const newFiles: SelectedFile[] = filesToAdd.map(file => ({
 			file,
-			type: file.type.startsWith('image/') ? 'image' : 'file',
-			previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+			type: IMAGE_TYPES.includes(file.type) ? 'image' : 'file',
+			previewUrl: IMAGE_TYPES.includes(file.type) ? URL.createObjectURL(file) : undefined,
+			description: IMAGE_TYPES.includes(file.type) && imageDescriptions && imageDescriptions[file.name]
+				? imageDescriptions[file.name]
+				: undefined
 		}));
 		setSelectedFiles(prev => [...prev, ...newFiles]);
 	};
@@ -656,9 +873,14 @@ const TalkPage = () => {
 		});
 	};
 
-	const openUploadModal = (type: 'file' | 'image' | 'book-generator') => {
+	const openUploadModal = (type: 'file' | 'image' | 'book-generator' | 'enhanced-book-generator') => {
 		if (type === 'book-generator') {
-			setIsBookGeneratorOpen(true);
+			setIsBookCreationModalOpen(true);
+			return;
+		}
+
+		if (type === 'enhanced-book-generator') {
+			setIsEnhancedBookModalOpen(true);
 			return;
 		}
 
@@ -676,19 +898,17 @@ const TalkPage = () => {
 			// Fetch initial data silently (without showing alerts)
 			const fetchInitialData = async () => {
 				try {
-					// Fetch bookmarks
-					const bookmarksResponse = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/bookmarked-conversations`, {
-						withCredentials: true
-					});
+					// Fetch bookmarks using FastAPI utility
+					const bookmarksData = await fetchBookmarksApi();
 
-					if (bookmarksResponse.data && Array.isArray(bookmarksResponse.data)) {
-						const formattedBookmarks = bookmarksResponse.data.map(conversation => {
+					if (bookmarksData && Array.isArray(bookmarksData)) {
+						const formattedBookmarks = bookmarksData.map(conversation => {
 							return {
 								id: conversation.id.toString(),
 								content: conversation.title || `Conversation ${conversation.id}`,
 								type: 'ai' as 'user' | 'ai',
-								timestamp: new Date(conversation.updated_at),
-								bookmarkedAt: new Date(conversation.updated_at)
+								timestamp: conversation.updated_at,
+								bookmarkedAt: conversation.updated_at
 							};
 						});
 
@@ -770,7 +990,7 @@ const TalkPage = () => {
 			}
 
 			// If we're already viewing this conversation and have messages, don't reload
-			if (conversationId === selectedConversationId.toString() && messages.length > 0) {
+			if (conversationId && conversationId === selectedConversationId.toString() && messages.length > 0) {
 				return true;
 			}
 
@@ -823,7 +1043,7 @@ const TalkPage = () => {
 			if (conversationId !== 'new-chat') {
 				const checkBookmarkStatus = async () => {
 					try {
-						const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${conversationId}`, {
+						const response = await axios.get(`${FASTAPI_BASE_URL}/api/conversations/${conversationId}`, {
 							withCredentials: true
 						});
 						setIsBookmarked(response.data.is_bookmarked || false);
@@ -874,26 +1094,60 @@ const TalkPage = () => {
 				return;
 			}
 
+			// Immediately update UI for better responsiveness
+			const newBookmarkStatus = !isBookmarked;
+			setIsBookmarked(newBookmarkStatus);
+
+			// Update bookmarks array immediately for UI consistency
+			if (newBookmarkStatus) {
+				// Find conversation title from history
+				const allConversations = history.flatMap(day => day.conversations);
+				const conversation = allConversations.find(conv => conv.id.toString() === conversationId);
+
+				// Add to bookmarks
+				const newBookmark: Bookmark = {
+					id: conversationId,
+					content: conversation?.title || `Conversation ${conversationId}`,
+					type: 'ai',
+					timestamp: new Date().toISOString(),
+					bookmarkedAt: new Date().toISOString()
+				};
+				setBookmarks(prev => [...prev, newBookmark]);
+			} else {
+				// Remove from bookmarks
+				setBookmarks(prev => prev.filter(bookmark => bookmark.id !== conversationId));
+			}
+
 			// Call the API to toggle bookmark status
 			const response = await axios.post(
-				`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${conversationId}/bookmark`,
+				`${FASTAPI_BASE_URL}/api/conversations/${conversationId}/bookmark`,
 				{},
 				{
 					withCredentials: true
 				}
 			);
 
-			// Update the local state with the response
+			// Update the local state with the response (in case server response differs)
 			setIsBookmarked(response.data.is_bookmarked);
 
-			// Refresh bookmarks in the sidebar
+			// Show toast notification
+			if (response.data.is_bookmarked) {
+				toast.success('Conversation bookmarked');
+			} else {
+				toast.success('Bookmark removed');
+			}
+
+			// Fetch updated bookmarks from server to ensure data consistency
 			fetchBookmarks();
 		} catch (error: any) {
 			console.error('Error in bookmark operation:', error);
 			if (error.response && error.response.status === 401) {
 				router.push('/login');
 			} else {
-				alert('Failed to update bookmark. Please try again.');
+				toast.error('Failed to update bookmark');
+				// Revert UI changes on error
+				setIsBookmarked(!isBookmarked);
+				fetchBookmarks();
 			}
 		}
 	};
@@ -908,7 +1162,7 @@ const TalkPage = () => {
 			}
 
 			// Call the API to delete the conversation
-			await axios.delete(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${conversationId}`, {
+			await axios.delete(`${FASTAPI_BASE_URL}/api/conversations/${conversationId}`, {
 				withCredentials: true
 			});
 
@@ -932,7 +1186,7 @@ const TalkPage = () => {
 				router.push('/login');
 			} else if (axios.isAxiosError(error) && error.response?.status !== 404) {
 				// Show error message only if it's not a 404 (already deleted)
-				alert('Failed to delete conversation. Please try again.');
+				toast.error('Failed to delete conversation. Please try again.');
 			}
 		}
 	};
@@ -947,31 +1201,47 @@ const TalkPage = () => {
 			}
 
 			// Call the API to toggle bookmark status
-			await axios.post(
-				`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${conversationId}/bookmark`,
+			const response = await axios.post(
+				`${FASTAPI_BASE_URL}/api/conversations/${conversationId}/bookmark`,
 				{},
 				{
 					withCredentials: true
 				}
 			);
 
+			// Show appropriate toast notification based on bookmark status
+			if (response.data.is_bookmarked) {
+				toast.success('Conversation bookmarked');
+
+				// Immediately add to bookmarks array for UI update
+				const newBookmark: Bookmark = {
+					id: conversationId.toString(),
+					content: history.flatMap(day => day.conversations).find(conv => conv.id === conversationId)?.title || `Conversation ${conversationId}`,
+					type: 'ai',
+					timestamp: new Date().toISOString(),
+					bookmarkedAt: new Date().toISOString()
+				};
+				setBookmarks(prev => [...prev, newBookmark]);
+			} else {
+				toast.success('Bookmark removed');
+
+				// Immediately remove from bookmarks array for UI update
+				setBookmarks(prev => prev.filter(bookmark => bookmark.id !== conversationId.toString()));
+			}
+
 			// Update the UI if this is the current conversation
 			if (params.conversationId === conversationId.toString()) {
-				// Check bookmark status of current conversation
-				const response = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${conversationId}`, {
-					withCredentials: true
-				});
 				setIsBookmarked(response.data.is_bookmarked || false);
 			}
 
-			// Refresh bookmarks if the panel is open
-			if (showBookmarks) {
-				fetchBookmarks();
-			}
+			// Also fetch bookmarks from server to ensure data consistency
+			fetchBookmarks();
 		} catch (error) {
 			console.error('Error bookmarking conversation:', error);
 			if (axios.isAxiosError(error) && error.response?.status === 401) {
 				router.push('/login');
+			} else {
+				toast.error('Failed to update bookmark');
 			}
 		}
 	};
@@ -985,9 +1255,12 @@ const TalkPage = () => {
 				return;
 			}
 
+			// Set saving state to show loading indicator
+			setIsSaving(String(conversationId));
+
 			// Call the API to update the conversation title
 			await axios.put(
-				`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${conversationId}`,
+				`${FASTAPI_BASE_URL}/api/conversations/${conversationId}`,
 				{
 					title: newTitle
 				},
@@ -1021,22 +1294,26 @@ const TalkPage = () => {
 			setIsRenaming(null);
 			setNewTitle('');
 
+			// Show toast notification
+			toast.success('Conversation renamed');
+
 			// If this is the current conversation, update the document title too
 			if (params.conversationId === String(conversationId)) {
 				document.title = newTitle;
 			}
 
-			// Refresh the history panel to show the updated title
-			if (showHistory) {
-				toggleHistory();
-			}
+			// No need to refresh the history panel as we've already updated the state
+			// This prevents the sidebar from closing
 		} catch (error) {
 			console.error('Error renaming conversation:', error);
 			if (axios.isAxiosError(error) && error.response?.status === 401) {
 				router.push('/login');
 			} else {
-				alert('Failed to rename conversation. Please try again.');
+				toast.error('Failed to rename conversation');
 			}
+		} finally {
+			// Clear saving state regardless of success or failure
+			setIsSaving(null);
 		}
 	};
 
@@ -1096,28 +1373,37 @@ const TalkPage = () => {
 	// Function to handle removing a bookmark from the sidebar
 	const handleRemoveBookmark = async (bookmark: Bookmark, index: number) => {
 		try {
-			// Make API call to update bookmark status in the database
-			await axios.post(
-				`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/conversations/${bookmark.id}/bookmark`,
-				{},
-				{
-					withCredentials: true
-				}
-			);
+			// Immediately update UI for better responsiveness
+			// Remove from bookmarks array
+			setBookmarks(prev => prev.filter((_, i) => i !== index));
 
 			// Update current conversation bookmark state if applicable
 			if (params.conversationId === bookmark.id) {
 				setIsBookmarked(false);
 			}
 
-			// Refresh bookmarks to get the latest data
+			// Make API call to update bookmark status in the database
+			await axios.post(
+				`${FASTAPI_BASE_URL}/api/conversations/${bookmark.id}/bookmark`,
+				{},
+				{
+					withCredentials: true
+				}
+			);
+
+			// Show toast notification
+			toast.success('Bookmark removed');
+
+			// Fetch updated bookmarks from server to ensure data consistency
 			fetchBookmarks();
 		} catch (error) {
 			console.error('Error removing bookmark:', error);
 			if (axios.isAxiosError(error) && error.response?.status === 401) {
 				router.push('/login');
 			} else {
-				alert('Failed to remove bookmark. Please try again.');
+				toast.error('Failed to remove bookmark');
+				// Revert UI changes on error by refreshing bookmarks
+				fetchBookmarks();
 			}
 		}
 	};
@@ -1125,7 +1411,16 @@ const TalkPage = () => {
 	// Function to perform the actual history clearing
 	const performClearHistory = async () => {
 		try {
-			// Clear the history state immediately for responsive UI
+			// Show loading toast
+			toast.loading('Clearing conversation history...');
+
+			// Call the API to clear all conversations first
+			await axios.delete(`${FASTAPI_BASE_URL}/api/user/${user?.id}/conversations`, {
+				withCredentials: true
+			});
+
+			// If API call succeeds, then update the UI
+			// Clear the history state
 			setHistory([]);
 			setFilteredHistory([]);
 
@@ -1135,21 +1430,19 @@ const TalkPage = () => {
 				router.push('/talk/conversation/new-chat');
 			}
 
-			// Call the API to clear all conversations
-			await axios.delete(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/${user?.id}/conversations`, {
-				withCredentials: true
-			});
-
 			// Close the confirmation dialog
 			setConfirmDialogOpen(false);
+
+			// Show success toast
+			toast.success('Conversation history cleared successfully!');
 		} catch (error) {
 			console.error('Error clearing history:', error);
 
+			// Show error toast
+			toast.error('Failed to clear conversation history. Please try again.');
+
 			if (axios.isAxiosError(error) && error.response?.status === 401) {
 				router.push('/login');
-			} else {
-				// alert('Failed to clear conversation history. Please try again.');
-				console.log('Failed to clear conversation history. Please try again.');
 			}
 		}
 	};
@@ -1208,11 +1501,30 @@ const TalkPage = () => {
 		}
 	}, [user])
 
+	// Handle voice message
+	const handleVoiceMessage = (file: File, transcription: string) => {
+		// Check if file has an S3 URL (from our enhanced File type)
+		const fileWithS3 = file as File & { s3Url?: string };
+
+		// Create a selected file object
+		const voiceFile: SelectedFile = {
+			file,
+			type: 'audio',
+			description: transcription,
+			previewUrl: fileWithS3.s3Url || URL.createObjectURL(file)
+		};
+
+		// Add to selected files
+		setSelectedFiles(prev => [...prev, voiceFile]);
+
+		// Don't auto-fill the input field with transcription
+	};
+
 	return (
 		<div className="flex flex-col min-h-screen bg-black">
 			{/* Sliding Credit Tracker */}
 			<div
-				className={`fixed right-0 top-1/2 -translate-y-1/2 transform transition-transform duration-300 z-50 ${isCreditTrackerVisible ? 'translate-x-0' : 'translate-x-[calc(100%-8px)]'
+				className={`fixed right-0 top-1/2 -translate-y-1/2 transform transition-transform duration-300 cursor-pointer z-50 ${isCreditTrackerVisible ? 'translate-x-0' : 'translate-x-[calc(100%-8px)]'
 					}`}
 				onMouseEnter={() => setIsCreditTrackerVisible(true)}
 				onMouseLeave={() => setIsCreditTrackerVisible(false)}
@@ -1225,18 +1537,18 @@ const TalkPage = () => {
 
 					{/* Bookmark icon that's visible when panel is closed */}
 					<div className={`absolute left-0 top-1/4 -translate-y-1/2 -translate-x-[calc(100%-1px)] bg-[var(--mrwhite-primary-color)] p-1 rounded-l-md transition-opacity duration-300 ${isCreditTrackerVisible ? 'opacity-0' : 'opacity-100'}`}>
-						<PiBookmarkFill className="w-5 h-5  max-[900px]:w-3 max-[900px]:h-3 text-black" />
+						<PiBookmarkFill className="w-5 h-5 max-[900px]:w-3 max-[900px]:h-3 text-black" />
 					</div>
 
 					<CreditTracker compact={true} showPurchaseOptions={false} />
-					{usageStats && !user?.is_premium && (
+					{/* {usageStats && !user?.is_premium && (
 						<UsageTracker
 							feature="chat"
 							currentUsage={usageStats.usage?.chat_messages_today || 0}
 							maxUsage={10}
 							className="mt-4 w-full"
 						/>
-					)}
+					)} */}
 				</div>
 			</div>
 
@@ -1248,7 +1560,7 @@ const TalkPage = () => {
 			/>
 
 			{/* SECTION 2 */}
-			<section className="min-h-[200px] px-2 md:px-0 max-w-[800px]:px-24 mb-20 flex flex-col justify-between items-center mt-20">
+			<section className="min-h-screen px-2 md:px-0 max-w-[800px]:px-24 mb-20 flex flex-col justify-center items-center mt-20">
 
 				{/* Header */}
 				<ChatHeader
@@ -1263,7 +1575,7 @@ const TalkPage = () => {
 					{/* Chat Container */}
 					{messages.length === 0 && (
 						<div className="text-center">
-							<h1 className="text-white text-[32px] max-[640px]:text-[24px] max-[400px]:text-[20px] max-[320px]:text-[18px] font-public-sans font-bold mb-4">
+							<h1 className="text-white text-[32px] max-[640px]:text-[24px] max-[400px]:text-[20px] max-[320px]:text-[18px] font-public-sans font-bold mb-4 select-none">
 								How can Mr. White help you?
 							</h1>
 							{isHealthMode && (
@@ -1277,23 +1589,91 @@ const TalkPage = () => {
 
 					<div ref={messagesContainerRef} className={`rounded-sm h-[400px] md:h-[292px] space-y-4 overflow-hidden pb-4 pr-4 flex-col gap-y-4 overflow-y-auto custom-scrollbar ${messages.length > 0 || isTyping ? 'flex' : 'hidden'}`}>
 						{
-							messages.map((message) => (
+							messages.map((message, index) => (
 								<Message
-									key={message.id}
+									key={`message-${message.id}-${index}-${message.timestamp}`}
 									id={message.id}
 									content={message.content}
 									type={message.type}
 									liked={message.liked}
 									disliked={message.disliked}
-									timestamp={new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+									timestamp={(() => {
+										// If the timestamp contains the hardcoded value, use current time instead
+										if (message.timestamp && message.timestamp.includes('09:49:28.146600')) {
+											return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+										}
+										// Handle UTC timestamps properly - ensure consistent display
+										if (message.timestamp) {
+											// Parse the timestamp as UTC and convert to local time for display
+											const utcDate = new Date(message.timestamp);
+											// Ensure we're working with a valid date
+											if (!isNaN(utcDate.getTime())) {
+												return utcDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+											}
+										}
+										return '';
+									})()}
 									attachments={message.attachments}
 									onCopy={copyToClipboard}
 									onLike={handleLike}
 									onSpeak={speakText}
 									onRetry={handleRetry}
-									onDownload={(url, filename) => {
-										// Implement download logic here
-										console.log('Downloading:', url, filename);
+									onDownload={(url, filename, attachmentId) => {
+										const downloadFile = async (fileUrl: string, fileName: string, attId?: number) => {
+											try {
+												// Validate inputs
+												if (!fileUrl) {
+													console.error('Download failed: URL is undefined or empty');
+													toast.error('Download failed: Invalid file URL');
+													return;
+												}
+												
+												// Fix URL handling - use backend proxy for S3 URLs to avoid CORS
+												let absoluteUrl;
+												if (fileUrl.startsWith('https://') && fileUrl.includes('s3.amazonaws.com') && attId) {
+													// S3 presigned URL - use backend proxy to avoid CORS issues
+													absoluteUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/download/${attId}`;
+												} else if (fileUrl.startsWith('http')) {
+													// Other HTTP URLs (legacy)
+													absoluteUrl = fileUrl;
+												} else if (fileUrl.startsWith('blob:')) {
+													// Already a blob URL
+													absoluteUrl = fileUrl;
+												} else if (fileUrl.startsWith('file://')) {
+													// Placeholder URL - file not actually stored, show error
+													toast.error('File not available for download. This file was uploaded before permanent storage was implemented.');
+													return;
+												} else {
+													// Fallback to relative URL
+													absoluteUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}${fileUrl}`;
+												}
+
+												// Fetch the file as a blob
+												const response = await fetch(absoluteUrl);
+												const blob = await response.blob();
+
+												// Create a blob URL and use it for download
+												const blobUrl = window.URL.createObjectURL(blob);
+												const anchor = document.createElement('a');
+												anchor.href = blobUrl;
+												anchor.download = fileName || 'download';
+												anchor.style.display = 'none';
+												document.body.appendChild(anchor);
+												anchor.click();
+
+												// Clean up
+												setTimeout(() => {
+													document.body.removeChild(anchor);
+													window.URL.revokeObjectURL(blobUrl);
+												}, 100);
+											} catch (error) {
+												console.error('Error downloading file:', error);
+												toast.error('Failed to download file');
+											}
+										};
+
+										// Execute the download function
+										downloadFile(url, filename, attachmentId);
 									}}
 								/>
 							))
@@ -1315,10 +1695,10 @@ const TalkPage = () => {
 						isHealthMode={isHealthMode}
 						toggleHealthMode={toggleHealthMode}
 						placeholder={isHealthMode ? "Ask about your pet's health records, vaccinations, medications..." : "Write your message here ..."}
+						onVoiceMessageAdd={handleVoiceMessage}
 					/>
 
 				</div>
-
 			</section>
 
 			{/* Sidebars */}
@@ -1328,39 +1708,42 @@ const TalkPage = () => {
 				title="Bookmarks"
 				isBookGenerated={false}
 			>
-				<div className="space-y-4">
-					{bookmarks.map((bookmark, index) => (
-						<div
-							key={index}
-							className="p-4 bg-neutral-800 rounded-lg space-y-2 cursor-pointer hover:bg-neutral-700"
-							onClick={() => {
-								loadConversationMessages(bookmark.id);
-								setShowBookmarks(false);
-							}}
-						>
-							<div className="flex items-center justify-between">
-								<span className="text-sm text-neutral-400">
-									{new Date(bookmark.timestamp).toLocaleString()}
-								</span>
-								<button
-									onClick={(e) => {
-										e.stopPropagation(); // Prevent triggering the parent div's onClick
-										handleRemoveBookmark(bookmark, index);
+				<div className="flex flex-col h-full">
+					{/* Bookmarks List */}
+					<div className="overflow-y-auto custom-scrollbar flex-1">
+						<div className="">
+							{bookmarks.map((bookmark, index) => (
+								<div
+									key={bookmark.id}
+									className="p-3 cursor-pointer hover:bg-neutral-800 flex justify-between items-center border-b-2 border-neutral-800"
+									onClick={() => {
+										loadConversationMessages(bookmark.id);
+										setShowBookmarks(false);
 									}}
-									className="text-neutral-400 hover:text-white"
 								>
-									<FiX />
-								</button>
-							</div>
-							<p className="text-sm">{bookmark.content}</p>
+									<p className="text-sm font-public-sans truncate flex-1">
+										{bookmark.content}
+									</p>
+									<div className="relative">
+										<button
+											onClick={(e) => {
+												e.stopPropagation(); // Prevent triggering the parent div's onClick
+												handleRemoveBookmark(bookmark, index);
+											}}
+											className="text-neutral-400 hover:text-white p-1"
+										>
+											<FiX />
+										</button>
+									</div>
+								</div>
+							))}
 						</div>
-					))}
-					{bookmarks.length === 0 && (
-						<p className="text-center text-neutral-400">No bookmarks yet</p>
-					)}
+						{bookmarks.length === 0 && (
+							<p className="text-center text-neutral-400 mt-4">No bookmarks yet</p>
+						)}
+					</div>
 				</div>
 			</Sidebar>
-
 			{/* History Sidebar - Keep this as is since it's quite complex */}
 			<Sidebar
 				isOpen={showHistory}
@@ -1385,9 +1768,9 @@ const TalkPage = () => {
 					</div>
 
 					{/* History List */}
-					<div className="space-y-6 overflow-y-auto flex-1">
+					<div className="space-y-6 overflow-y-auto custom-scrollbar flex-1">
 						{filteredHistory.map((day, index) => (
-							<div key={index} className="space-y-3">
+							<div key={day.date} className="space-y-3">
 								<h3 className="text-lg font-semibold text-neutral-400">
 									{day.date}
 								</h3>
@@ -1398,23 +1781,39 @@ const TalkPage = () => {
 											className="p-3 cursor-pointer hover:bg-neutral-800 flex justify-between items-center border-b-2 border-neutral-800"
 										>
 											{isRenaming === String(conversation.id) ? (
-												<input
-													type="text"
-													value={newTitle}
-													onChange={(e) => setNewTitle(e.target.value)}
-													onKeyDown={(e) => {
-														32
-														if (e.key === 'Enter') {
+												<div className="flex items-center w-3/4 rename-input">
+													<input
+														type="text"
+														value={newTitle}
+														onChange={(e) => setNewTitle(e.target.value)}
+														onKeyDown={(e) => {
+															if (e.key === 'Enter') {
+																handleRenameConversation(conversation.id);
+															} else if (e.key === 'Escape') {
+																setIsRenaming(null);
+																setNewTitle('');
+															}
+														}}
+														className="bg-neutral-700 text-white px-2 py-1 rounded flex-grow text-sm"
+														autoFocus
+														onClick={(e) => e.stopPropagation()}
+													/>
+													<button
+														onClick={(e) => {
+															e.stopPropagation();
 															handleRenameConversation(conversation.id);
-														} else if (e.key === 'Escape') {
-															setIsRenaming(null);
-															setNewTitle('');
-														}
-													}}
-													className="bg-neutral-700 text-white px-2 py-1 rounded w-full text-sm rename-input"
-													autoFocus
-													onClick={(e) => e.stopPropagation()}
-												/>
+														}}
+														className="ml-1 p-1 bg-blue-600 hover:bg-blue-700 rounded text-white"
+														title="Save"
+														disabled={isSaving === String(conversation.id)}
+													>
+														{isSaving === String(conversation.id) ? (
+															<AiOutlineLoading className="w-4 h-4 animate-spin" />
+														) : (
+															<FiSave className="w-4 h-4" />
+														)}
+													</button>
+												</div>
 											) : (
 												<p
 													className="text-sm font-public-sans truncate flex-1"
@@ -1515,10 +1914,18 @@ const TalkPage = () => {
 				type="danger"
 			/>
 
-			{/* Book Generator Sidebar */}
-			<BookGeneratorSidebar
-				isOpen={isBookGeneratorOpen}
-				onClose={() => setIsBookGeneratorOpen(false)}
+			{/* Book Creation Modal */}
+			<BookCreationModal
+				isOpen={isBookCreationModalOpen}
+				onClose={() => setIsBookCreationModalOpen(false)}
+				conversationId={conversationId}
+			/>
+
+			{/* Enhanced Book Creation Modal */}
+			<EnhancedBookCreationModal
+				isOpen={isEnhancedBookModalOpen}
+				onClose={() => setIsEnhancedBookModalOpen(false)}
+				conversationId={conversationId}
 			/>
 
 			{/* Premium Gate for Upgrade Prompt */}

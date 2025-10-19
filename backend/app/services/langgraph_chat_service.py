@@ -405,6 +405,19 @@ class LangGraphChatService:
         user_message = state["messages"][-1].content if state["messages"] else ""
         user_id = state.get("user_id")
         
+        # Get username for personalization
+        username = None
+        dog_name = None
+        try:
+            from app.models.user import User
+            user = User.query.get(user_id)
+            if user:
+                username = user.username
+                if hasattr(user, 'dog_name') and user.dog_name:
+                    dog_name = user.dog_name
+        except Exception as e:
+            current_app.logger.error(f"Error getting user info for personalization: {str(e)}")
+        
         # Check if this is a reminder creation request
         reminder_keywords = ["remind", "reminder", "schedule", "set reminder", "create reminder", "don't forget"]
         is_reminder_request = any(keyword in user_message.lower() for keyword in reminder_keywords)
@@ -457,6 +470,26 @@ class LangGraphChatService:
                 Context Sources:
                 {chr(10).join([f"- {source.get('type', '')}: {source.get('title', '')}" 
                               for source in user_context.get('sources', [])[:5]])}
+                """
+                
+                # Add personalization if username is available
+                if username:
+                    system_prompt += f"""
+                
+                PERSONALIZATION:
+                - You are talking to {username}. Address them by name occasionally in a natural, conversational way.
+                - Use their name especially when greeting them or providing important advice.
+                - Don't overuse their name - once or twice in a response is sufficient.
+                """
+                
+                # Add dog name if available
+                if dog_name:
+                    system_prompt += f"""
+                - When discussing their dog, refer to {dog_name} by name rather than saying "your dog".
+                - Incorporate {dog_name}'s name naturally in your responses about their pet.
+                """
+                
+                system_prompt += """
                 
                 Provide a helpful, accurate response based on the available context.
                 If you reference specific information, mention where it came from.

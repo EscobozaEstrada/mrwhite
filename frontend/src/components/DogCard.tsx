@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion"; // ✅ Use framer-motion instead of motion/react
+import { motion } from "motion/react";
 
 interface DogCardProps {
   imageSrc: string;
@@ -14,6 +14,7 @@ interface DogCardProps {
 export function DogCard({ imageSrc, imageAlt, title, description, delay = 0 }: DogCardProps) {
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay, ease: "easeOut" }}

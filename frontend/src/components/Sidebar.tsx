@@ -127,7 +127,7 @@ export default function Sidebar({
                     <div className="flex items-center ">
                         <button
                             onClick={onClose}
-                            className="p-1 mr-2 border-2 border-white hover:bg-neutral-800 rounded-full transition-colors"
+                            className="p-1 mr-2 border-2 border-white hover:bg-neutral-800 rounded-full transition-colors cursor-pointer"
                         >
                             <FiX className="w-3 h-3" />
                         </button>
@@ -138,7 +138,7 @@ export default function Sidebar({
                     {title === "History" && onClearHistory && (
                         <button
                             onClick={onClearHistory}
-                            className="p-2 max-[360px]:p-1 max-[360px]:text-sm text-neutral-400 hover:text-white flex items-center gap-1 rounded bg-neutral-800 hover:bg-neutral-700"
+                            className="p-2 max-[360px]:p-1 max-[360px]:text-sm text-neutral-400 hover:text-white flex items-center gap-1 rounded bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
                         >
                             <BiSolidTrash className="w-5 h-5" />
                             <span className="text-sm">Clear History</span>

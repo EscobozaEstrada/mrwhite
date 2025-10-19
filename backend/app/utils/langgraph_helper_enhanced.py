@@ -23,8 +23,8 @@ from app.agents.agent_manager import get_agent_manager
 from app.utils.cache import cached, performance_monitor
 
 
-class EnhancedChatState(TypedDict):
-    """Enhanced state for the chat system"""
+class LangGraphHelperState(TypedDict):
+    """State for the LangGraph helper processing system"""
     messages: Annotated[Sequence[BaseMessage], "The conversation messages"]
     user_id: int
     user_email: str
@@ -46,7 +46,7 @@ class EnhancedLangGraphProcessor:
     def create_enhanced_graph(self) -> StateGraph:
         """Create an enhanced graph with multi-agent support"""
         
-        def route_to_agent(state: EnhancedChatState) -> str:
+        def route_to_agent(state: LangGraphHelperState) -> str:
             """Route to appropriate agent based on query analysis"""
             if not state.get("messages"):
                 return "general_chat"
@@ -62,7 +62,7 @@ class EnhancedLangGraphProcessor:
             
             return "general_chat"
         
-        def process_with_agent(state: EnhancedChatState) -> EnhancedChatState:
+        def process_with_agent(state: LangGraphHelperState) -> LangGraphHelperState:
             """Process message with the selected agent"""
             try:
                 # Extract conversation history
@@ -122,7 +122,7 @@ class EnhancedLangGraphProcessor:
                 }
         
         # Create the graph
-        workflow = StateGraph(EnhancedChatState)
+        workflow = StateGraph(LangGraphHelperState)
         
         # Add the main processing node
         workflow.add_node("process_message", process_with_agent)
@@ -154,7 +154,7 @@ class EnhancedLangGraphProcessor:
             messages.append(HumanMessage(content=query))
             
             # Create initial state
-            initial_state = EnhancedChatState(
+            initial_state = LangGraphHelperState(
                 messages=messages,
                 user_id=user_id,
                 user_email=user_email,
@@ -254,6 +254,102 @@ def process_with_enhanced_graph(user_id: int, user_email: str, conversation_id: 
     This is the primary interface for the chatbot route to use
     """
     try:
+        # Import the conversation context manager
+        from app.utils.conversation_context_manager import get_context_manager
+        
+        # Get the conversation context manager
+        context_manager = get_context_manager()
+        
+        # Check if this is a document-related query using the context manager
+        is_document_query = context_manager.is_document_query(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            query=query,
+            conversation_history=conversation_history
+        )
+        
+        # If the query is related to documents, use the agent with tools
+        if is_document_query:
+            current_app.logger.info(f"Document query detected by context manager: '{query}'")
+            
+            # Register this as a document query in the context manager
+            context_manager.register_document_query(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                query=query
+            )
+            
+            # Import the agent from the chatbot module
+            from app.routes.chatbot import agent
+            
+            # Convert conversation history to LangChain message format
+            messages = []
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # Keep last 5 messages for context
+                    if msg['type'] == 'user':
+                        messages.append(HumanMessage(content=msg['content']))
+                    else:
+                        messages.append(AIMessage(content=msg['content']))
+            
+            # Set environment variable for tools to access
+            os.environ["CURRENT_USER_ID"] = str(user_id)
+            current_app.logger.info(f"Set CURRENT_USER_ID environment variable to {user_id}")
+            
+            # Run the agent with the query
+            try:
+                # For document queries, add a hint to encourage tool usage
+                enhanced_query = query
+                
+                # Get document context to enhance the query
+                document_context = context_manager.get_document_context(user_id, conversation_id)
+                if document_context and document_context.get("document_names"):
+                    doc_names = ", ".join(document_context.get("document_names", []))
+                    enhanced_query = f"{query} (Please use the summarize_files tool to provide information from my documents: {doc_names})"
+                    current_app.logger.info(f"Enhanced query with document context: {enhanced_query}")
+                elif "summarize" in query.lower() or "summary" in query.lower():
+                    enhanced_query = f"{query} (Please use the summarize_files tool to provide information from my documents)"
+                    current_app.logger.info(f"Enhanced query with tool hint: {enhanced_query}")
+                
+                # Log the agent invocation
+                current_app.logger.info(f"Invoking agent with tools for document query. User ID: {user_id}")
+                
+                # Invoke the agent
+                agent_result = agent.invoke({"input": enhanced_query, "chat_history": messages})
+                
+                # Log the agent's actions
+                if hasattr(agent_result, 'intermediate_steps') and agent_result.intermediate_steps:
+                    for i, step in enumerate(agent_result.intermediate_steps):
+                        if len(step) >= 2:
+                            action = step[0]
+                            tool_name = getattr(action, 'tool', 'unknown_tool')
+                            tool_input = getattr(action, 'tool_input', 'unknown_input')
+                            current_app.logger.info(f"Agent tool use - Step {i+1}: Tool={tool_name}, Input={tool_input}")
+                
+                current_app.logger.info(f"Agent response received for document query")
+                
+                # Process the agent's result
+                if agent_result and hasattr(agent_result, 'output'):
+                    current_app.logger.info(f"Returning agent output (attribute)")
+                    return agent_result.output
+                elif isinstance(agent_result, dict) and 'output' in agent_result:
+                    current_app.logger.info(f"Returning agent output (dict)")
+                    return agent_result['output']
+                elif isinstance(agent_result, str):
+                    current_app.logger.info(f"Returning agent output (string)")
+                    return agent_result
+                else:
+                    # Fallback if agent result format is unexpected
+                    current_app.logger.warning(f"Unexpected agent result format: {type(agent_result)}")
+                    # Continue with normal processing
+            except Exception as agent_error:
+                current_app.logger.error(f"Error using agent with tools: {str(agent_error)}")
+                import traceback
+                current_app.logger.error(f"Agent error traceback: {traceback.format_exc()}")
+                # Continue with normal processing as fallback
+                current_app.logger.info("Falling back to normal processing after agent error")
+        
+        # Default processing using the enhanced graph system
+        current_app.logger.info(f"Using default enhanced graph processing for query: '{query}'")
         processor = get_enhanced_processor()
         result = processor.process_enhanced_message(
             user_id=user_id,
@@ -262,6 +358,12 @@ def process_with_enhanced_graph(user_id: int, user_email: str, conversation_id: 
             query=query,
             conversation_history=conversation_history
         )
+        
+        # If the processing was successful, update thread session data with document context
+        if result["success"] and result.get("thread_id"):
+            thread_id = result.get("thread_id")
+            # Update thread session data with document context
+            context_manager.update_thread_session_data(user_id, conversation_id, thread_id)
         
         if result["success"]:
             current_app.logger.info(f"Enhanced processing successful - Agent: {result.get('agent_type')}, Thread: {result.get('thread_id')}")
@@ -272,6 +374,8 @@ def process_with_enhanced_graph(user_id: int, user_email: str, conversation_id: 
             
     except Exception as e:
         current_app.logger.error(f"Critical error in enhanced graph processing: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Critical error traceback: {traceback.format_exc()}")
         return f"I apologize, but I encountered a critical error processing your request. Please try again."
 
 

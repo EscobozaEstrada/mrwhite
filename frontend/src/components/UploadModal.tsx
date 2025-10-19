@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { FiUpload, FiX } from 'react-icons/fi'
 import Image from 'next/image'
+import toast from '@/components/ui/sound-toast'
 
 interface UploadModalProps {
     isOpen: boolean
@@ -22,6 +23,9 @@ export default function UploadModal({
     const [dragActive, setDragActive] = useState(false)
     const [selectedFiles, setSelectedFiles] = useState<File[]>([])
     const inputRef = useRef<HTMLInputElement>(null)
+    
+    // Maximum number of files allowed
+    const MAX_FILES = 5
 
     const handleDrag = (e: React.DragEvent) => {
         e.preventDefault()
@@ -51,15 +55,73 @@ export default function UploadModal({
         }
     }
 
+    // Define allowed file types
+    const IMAGE_TYPES = [
+        'image/jpeg', 
+        'image/jpg', 
+        'image/png', 
+        'image/gif', 
+        'image/webp',
+        'image/svg+xml'
+    ]
+    
+    const TEXT_BASED_TYPES = [
+        'text/plain',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/rtf',
+        'text/markdown',
+        'text/csv',
+        'application/json',
+        'application/xml',
+        'text/xml',
+        'text/html'
+    ]
+    
+    // Function to show file limit error
+    const showFileLimitError = () => {
+        console.log('Showing file limit error toast')
+        const message = `You can only upload a maximum of ${MAX_FILES} files at once.`
+        toast.error(message)
+    }
+    
     const handleFiles = (files: File[]) => {
+        console.log(`Attempting to add ${files.length} files. Currently have ${selectedFiles.length}/${MAX_FILES} files.`)
+        
+        // Check if adding these files would exceed the maximum
+        if (selectedFiles.length >= MAX_FILES) {
+            console.log('Maximum file limit reached, showing toast notification')
+            showFileLimitError()
+            return
+        }
+        
+        // Filter files by type
         const validFiles = files.filter(file => {
             if (type === 'image') {
-                return file.type.startsWith('image/')
+                return IMAGE_TYPES.includes(file.type)
             }
-            // Add any file type restrictions here if needed
-            return true
+            // Only allow image and text-based files
+            return IMAGE_TYPES.includes(file.type) || TEXT_BASED_TYPES.includes(file.type)
         })
-        setSelectedFiles(prev => [...prev, ...validFiles])
+        
+        // Show error message if some files were filtered out due to type
+        if (validFiles.length < files.length) {
+            console.log(`${files.length - validFiles.length} files were filtered out due to invalid file types`)
+            toast.error('Some files were not added. Only image and text-based files are allowed.')
+        }
+        
+        // Enforce the maximum file limit
+        const availableSlots = MAX_FILES - selectedFiles.length
+        const filesToAdd = validFiles.slice(0, availableSlots)
+        
+        // Show warning if some files were cut off due to the limit
+        if (filesToAdd.length < validFiles.length) {
+            console.log(`${validFiles.length - filesToAdd.length} files were cut off due to the ${MAX_FILES} file limit`)
+            toast.error(`Only ${availableSlots} more files could be added due to the ${MAX_FILES} file limit.`)
+        }
+        
+        setSelectedFiles(prev => [...prev, ...filesToAdd])
     }
 
     const removeFile = (index: number) => {
@@ -72,6 +134,8 @@ export default function UploadModal({
         onClose()
     }
 
+    // No longer showing test toast on modal open
+    
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[500px] bg-neutral-900 border-neutral-800">
@@ -108,17 +172,27 @@ export default function UploadModal({
                             ref={inputRef}
                             type="file"
                             multiple
-                            accept={type === 'image' ? 'image/*' : undefined}
+                            accept={type === 'image' ? 
+                                'image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml' : 
+                                'image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,text/markdown,text/csv,application/json,application/xml,text/xml,text/html'}
                             onChange={handleChange}
                             className="hidden"
                         />
+                        <div className="text-xs text-neutral-500 text-center mt-2 space-y-1">
+                            <p>
+                                {type === 'image' ? 
+                                    'Supported formats: JPEG, PNG, GIF, WebP, SVG' : 
+                                    'Supported formats: Images (JPEG, PNG, GIF, WebP, SVG) and text-based files (PDF, DOC, TXT, RTF, MD, CSV, JSON, XML, HTML)'}
+                            </p>
+                            <p>Maximum {MAX_FILES} files allowed ({selectedFiles.length}/{MAX_FILES} selected)</p>
+                        </div>
                     </div>
                 </div>
 
                 {selectedFiles.length > 0 && (
                     <div className="mt-4 space-y-2">
                         <p className="text-sm text-neutral-400">Selected files:</p>
-                        <div className="max-h-[200px] overflow-y-auto space-y-2">
+                        <div className="max-h-[200px] overflow-y-auto custom-scrollbar pr-2 space-y-2">
                             {selectedFiles.map((file, index) => (
                                 <div 
                                     key={index}
@@ -162,7 +236,7 @@ export default function UploadModal({
                         onClick={handleUpload}
                         disabled={selectedFiles.length === 0}
                     >
-                        Upload
+                        Upload {selectedFiles.length > 0 ? `(${selectedFiles.length}/${MAX_FILES})` : ''}
                     </Button>
                 </div>
             </DialogContent>

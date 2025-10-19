@@ -1,0 +1,45 @@
+{% extends "book/base.html" %}
+
+{% block content %}
+<!-- Cover Page -->
+<div class="cover">
+    {% if book.cover_image %}
+    <img src="{{ book.cover_image }}" class="cover-image" alt="Cover Image">
+    {% endif %}
+    <div class="cover-content">
+        <h1 class="book-title">{{ book.title }}</h1>
+        <div class="author">By {{ author_name }}</div>
+    </div>
+</div>
+
+<!-- Table of Contents -->
+<div class="toc">
+    <img src="https://master-white-project.s3.us-east-1.amazonaws.com/public/logo1.png" class="toc-logo" alt="Cover Image">
+    <h1>Table of Contents</h1>
+    <ul>
+        {% for chapter in chapters %}
+        <li>
+            <a href="#chapter-{{ loop.index }}" title="Chapter {{ loop.index }}: {{ chapter.clean_title }}">
+                <span class="dots"></span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<!-- Chapters -->
+{% for chapter in chapters %}
+<section class="chapter" id="chapter-{{ loop.index }}">
+    <!-- First page of chapter with no running header -->
+    <div class="chapter-first-page">
+        <div class="chapter-header">
+            <h2 class="chapter-title">Chapter {{ loop.index }}: {{ chapter.clean_title }}</h2>
+        </div>
+        <div class="chapter-content">
+            <!-- Images are now interspersed within formatted_content -->
+            {{ chapter.formatted_content|safe }}
+        </div>
+    </div>
+</section>
+{% endfor %}
+{% endblock %} 

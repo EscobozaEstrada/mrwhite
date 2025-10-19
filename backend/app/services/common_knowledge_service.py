@@ -349,6 +349,47 @@ Please provide a comprehensive response that considers both the specific query a
                 'timestamp': datetime.now().isoformat()
             }
 
+    def get_relevant_knowledge(self, query: str, top_k: int = 3) -> List[Any]:
+        """
+        Get relevant knowledge from the common knowledge base
+        
+        Args:
+            query: Search query
+            top_k: Number of results to return
+            
+        Returns:
+            List of relevant knowledge documents
+        """
+        if not self.is_available:
+            return []
+        
+        try:
+            success, results = self.search_common_knowledge(query, top_k=top_k)
+            
+            if not success or not results:
+                return []
+            
+            # Convert to Document objects for compatibility with other knowledge sources
+            from langchain_core.documents import Document
+            
+            documents = []
+            for result in results:
+                documents.append(Document(
+                    page_content=result['content'],
+                    metadata={
+                        'source': result['source'],
+                        'source_type': 'common_knowledge',
+                        'relevance_score': result['relevance_score'],
+                        'book_title': result['book_title']
+                    }
+                ))
+            
+            return documents
+            
+        except Exception as e:
+            current_app.logger.error(f"Error getting relevant knowledge: {str(e)}")
+            return []
+
 # Global instance
 common_knowledge_service = CommonKnowledgeService()
 

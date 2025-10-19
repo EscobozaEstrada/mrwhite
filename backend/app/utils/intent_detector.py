@@ -93,21 +93,26 @@ class IntentDetector:
             A tuple containing (intent_key, suggestions_list)
         """
         # Prepare the system prompt
-        system_prompt = """You are an intent detection system for a dog-focused AI assistant called Mr. White.
-        Analyze the user's message and determine their intent. Choose the MOST likely intent from this list:
-        
-        - QUESTION: General question about dogs
-        - FOLLOW_UP: Follow-up question related to previous conversation
-        - DOCUMENT_QUERY: Question about user documents
-        - FILE_MANAGEMENT: Request to upload, manage, or send files
-        - GREETING: General greeting or conversation starter
-        - HELP: Request for help with chatbot capabilities
-        - FAREWELL: Ending the conversation
-        - FEEDBACK: Providing feedback about the chatbot
-        - UNKNOWN: Intent cannot be determined
-        
-        Respond with ONLY the intent key (e.g., "QUESTION").
-        """
+        system_prompt = """You are an intent detection system for Mr. White, a dog-focused pet care expert.
+
+        Your job is to analyze user messages and determine their intent. Return your response in the following JSON format:
+        {
+          "intent": "primary_intent_name",
+          "confidence": 0.95,
+          "entities": ["entity1", "entity2"],
+          "context": "brief_explanation"
+        }
+
+        Possible intents:
+        - general_question: General pet care questions
+        - health_concern: Health-related questions or concerns
+        - training_help: Training and behavior questions  
+        - emergency: Urgent health situations requiring immediate attention
+        - appointment: Scheduling or reminder requests
+        - file_upload: User wants to upload documents or images
+        - previous_context: User asking about previous conversation
+
+        Always return valid JSON only."""
         
         # Prepare conversation context if available
         context = ""

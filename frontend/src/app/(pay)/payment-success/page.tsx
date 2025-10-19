@@ -9,7 +9,7 @@ import { Coins } from 'lucide-react';
 
 const PaymentSuccessPage = () => {
     const searchParams = useSearchParams();
-    const { refreshSubscriptionStatus, user, triggerCreditRefresh } = useAuth();
+    const { refreshSubscriptionStatus, user, triggerCreditRefresh, creditStatus } = useAuth();
     const [amount, setAmount] = useState<string>('0');
     const [paymentType, setPaymentType] = useState<'subscription' | 'credits'>('subscription');
     const [packageInfo, setPackageInfo] = useState<any>(null);
@@ -41,191 +41,84 @@ const PaymentSuccessPage = () => {
             }
         }
 
-        // Refresh user subscription status to reflect changes
-        const refreshUserData = async () => {
-            try {
-                await refreshSubscriptionStatus();
-
-                // ONLY for credit purchases, try manual credit processing
-                if (paymentType === 'credits' && packageInfo && user?.id) {
-                    const paymentIntentParam = searchParams.get('payment_intent');
-
-                    if (paymentIntentParam) {
-                        try {
-                            console.log('Attempting manual credit processing for credit purchase...');
-                            const creditResponse = await fetch(
-                                `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/payment/verify-and-process-credit-purchase`,
-                                {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    },
-                                    credentials: 'include',
-                                    body: JSON.stringify({
-                                        payment_intent_id: paymentIntentParam,
-                                        user_id: user?.id
-                                    })
-                                }
-                            );
-
-                            if (creditResponse.ok) {
-                                const creditData = await creditResponse.json();
-                                console.log('✅ Credit purchase processed successfully:', creditData);
-                                triggerCreditRefresh();
-                            } else {
-                                const errorData = await creditResponse.json().catch(() => ({}));
-                                console.log('⚠️ Manual credit processing failed:', errorData.error || 'Unknown error');
-                            }
-                        } catch (error) {
-                            console.error('❌ Credit processing error:', error);
-                        }
-                    }
-
-                    // Always trigger credit refresh for credit purchases
-                    triggerCreditRefresh();
-                } else if (paymentType === 'subscription') {
-                    // For subscription payments, just trigger a simple refresh
-                    console.log('Subscription payment - triggering subscription refresh only');
-                    triggerCreditRefresh();
-                } else {
-                    console.log('Unknown payment type or missing data - skipping credit processing');
-                }
-            } catch (error) {
-                console.error('Error refreshing user data:', error);
-            } finally {
-                setIsRefreshing(false);
-            }
-        };
-
-        // Determine refresh strategy based on payment type
-        if (paymentType === 'credits') {
-            // For credit purchases, multiple refresh attempts with delays
-            console.log('Setting up credit purchase refresh strategy');
-            const refreshAttempts = [
-                { delay: 1000, description: 'Initial refresh' },
-                { delay: 3000, description: 'Second refresh' },
-                { delay: 6000, description: 'Final refresh' }
-            ];
-
-            refreshAttempts.forEach(({ delay, description }) => {
-                setTimeout(async () => {
-                    console.log(`Credit purchase: ${description}`);
-                    await refreshUserData();
-                }, delay);
-            });
-        } else if (paymentType === 'subscription') {
-            // For subscription payments, single refresh
-            console.log('Setting up subscription refresh strategy');
-            setTimeout(refreshUserData, 2000);
-        } else {
-            // Default fallback
-            console.log('Setting up default refresh strategy');
-            setTimeout(refreshUserData, 1000);
-        }
-    }, [searchParams, refreshSubscriptionStatus, user, triggerCreditRefresh]);
-
-    // Auto-refresh subscription status for subscription payments
-    useEffect(() => {
-        const autoRefresh = async () => {
-            if (paymentType === 'subscription' && user) {
-                try {
-                    // Wait a moment for webhook to process
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    await refreshSubscriptionStatus();
-
-                    // If status still not updated, try again after another delay
-                    setTimeout(async () => {
-                        try {
-                            await refreshSubscriptionStatus();
-                        } catch (error) {
-                            console.error('Error on second refresh attempt:', error);
-                        }
-                    }, 3000);
-                } catch (error) {
-                    console.error('Error auto-refreshing subscription status:', error);
-                }
-            }
-        };
-
-        autoRefresh();
-    }, [searchParams, refreshSubscriptionStatus, user]);
-
-    // Auto-refresh credit displays for credit purchases with verification
-    useEffect(() => {
-        if (paymentType === 'credits' && user && !refreshTriggeredRef.current) {
-            console.log('Credit purchase detected - starting enhanced credit refresh cycle');
+        // Only refresh once when the component mounts
+        if (!refreshTriggeredRef.current && user) {
             refreshTriggeredRef.current = true;
 
-            const verifyCreditsUpdated = async (attempts = 0) => {
-                const maxAttempts = 8;
-                const delay = Math.min(2000 + (attempts * 1000), 10000); // Progressive delay
-
+            // Single refresh with a delay to allow webhook processing
+            setTimeout(async () => {
                 try {
-                    // Fetch current credit status
-                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/credit-system/status`, {
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
-                    });
+                    console.log('Performing single payment verification refresh...');
 
-                    if (response.ok) {
-                        const result = await response.json();
-                        if (result.success && result.data) {
-                            const currentBalance = result.data.credits_balance;
-                            const totalPurchased = result.data.total_credits_purchased || 0;
+                    // For subscription payments, refresh subscription status
+                    if (paymentType === 'subscription') {
+                        await refreshSubscriptionStatus();
+                    }
 
-                            console.log(`Credit verification attempt ${attempts + 1}: Balance=${currentBalance}, Purchased=${totalPurchased}`);
-
-                            // Check if credits were actually added (balance should be > 3000 for Elite users)
-                            if (currentBalance > 3000 || totalPurchased > 0) {
-                                console.log('✅ Credit purchase verified - credits were added successfully!');
-                                triggerCreditRefresh();
-                                setRefreshComplete(true);
-                                return true;
+                    // For credit purchases, process if needed and refresh credit status
+                    if (paymentType === 'credits') {
+                        const paymentIntentParam = searchParams.get('payment_intent');
+                        if (paymentIntentParam && !processedParam) {
+                            try {
+                                console.log('Attempting manual credit processing...');
+                                await fetch(
+                                    `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/payment/verify-and-process-credit-purchase`,
+                                    {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        credentials: 'include',
+                                        body: JSON.stringify({
+                                            payment_intent_id: paymentIntentParam,
+                                            user_id: user?.id
+                                        })
+                                    }
+                                );
+                            } catch (error) {
+                                console.error('Credit processing error:', error);
                             }
                         }
-                    }
 
-                    // If not updated yet and we haven't exceeded max attempts, try again
-                    if (attempts < maxAttempts) {
-                        setTimeout(() => verifyCreditsUpdated(attempts + 1), delay);
-                    } else {
-                        console.warn('⚠️ Credit verification timed out - triggering final refresh');
+                        // Refresh credit status once
                         triggerCreditRefresh();
-                        setRefreshComplete(true);
                     }
+
                 } catch (error) {
-                    console.error('Error during credit verification:', error);
-                    if (attempts < maxAttempts) {
-                        setTimeout(() => verifyCreditsUpdated(attempts + 1), delay);
-                    } else {
-                        console.warn('⚠️ Credit verification failed after max attempts');
-                        setRefreshComplete(true);
-                    }
+                    console.error('Error during payment verification:', error);
+                } finally {
+                    setIsRefreshing(false);
+                    setRefreshComplete(true);
                 }
-            };
+            }, 3000); // Single delay of 3 seconds
+        }
+    }, [searchParams, user, paymentType, refreshSubscriptionStatus, triggerCreditRefresh]);
 
-            // Start verification process
-            verifyCreditsUpdated();
+    // Simplified verification for credit purchases
+    useEffect(() => {
+        if (paymentType === 'credits' && user && !refreshTriggeredRef.current && creditStatus) {
+            refreshTriggeredRef.current = true;
 
-            // Also trigger immediate refresh as before
-            triggerCreditRefresh();
+            // Check if credits were already added
+            const currentBalance = creditStatus.credits_balance;
+            const totalPurchased = creditStatus.total_credits_purchased || 0;
 
-            // Cleanup function
-            return () => {
-                console.log('Credit verification process cleaned up');
-            };
-        } else if (paymentType === 'subscription' && user) {
-            // For subscription payments, just do a simple refresh without credit verification
-            console.log('Subscription payment detected - simple refresh only');
-            setTimeout(() => {
-                triggerCreditRefresh();
+            console.log(`Credit verification: Balance=${currentBalance}, Purchased=${totalPurchased}`);
+
+            // If credits don't appear to be added yet, try one more refresh after a delay
+            if (currentBalance < 3000 && totalPurchased === 0) {
+                setTimeout(() => {
+                    console.log('Final credit verification attempt');
+                    triggerCreditRefresh();
+                    setRefreshComplete(true);
+                }, 5000);
+            } else {
+                console.log('✅ Credit purchase verified - credits were added successfully!');
                 setRefreshComplete(true);
-            }, 2000);
-        } else {
-            // No payment type detected or no user, stop all processing
+            }
+        } else if (paymentType === 'subscription' && user) {
+            // For subscription payments, just mark as complete
             setRefreshComplete(true);
         }
-    }, [paymentType, user]); // Removed triggerCreditRefresh from dependencies
+    }, [paymentType, user, creditStatus]);
 
     const getSuccessContent = () => {
         if (paymentType === 'credits' && packageInfo) {

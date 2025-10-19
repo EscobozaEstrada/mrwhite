@@ -27,19 +27,19 @@ import { HiOutlineSupport } from "react-icons/hi";
 import { BiSolidBookBookmark } from "react-icons/bi";
 import { FaUser, FaVectorSquare } from "react-icons/fa";
 import { MdOutlineFamilyRestroom } from "react-icons/md";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useState, useEffect } from 'react';
 import { UsageTracker } from '@/components/UsageTracker';
 import { PremiumGate } from '@/components/PremiumGate';
 import { CreditDisplay } from '@/components/CreditDisplay';
 import { Card } from '@/components/ui/card';
-import { Crown, Coins, TrendingUp, Calendar, ArrowRight } from 'lucide-react';
+import { Crown, Coins, TrendingUp, Calendar, ArrowRight, MessageSquare } from 'lucide-react';
+import { LuCrown } from "react-icons/lu";
 
 export default function Home() {
   const router = useRouter();
-  const { user, setUser, creditRefreshTrigger } = useAuth();
+  const { user, setUser, creditRefreshTrigger, creditStatus } = useAuth();
   const [usageStats, setUsageStats] = useState<any>(null);
-  const [creditStatus, setCreditStatus] = useState<any>(null);
 
   // Fetch usage stats for free users
   useEffect(() => {
@@ -47,13 +47,6 @@ export default function Home() {
       fetchUsageStats();
     }
   }, [user]);
-
-  // Fetch credit status for Elite users
-  useEffect(() => {
-    if (user && user.is_premium) {
-      fetchCreditStatus();
-    }
-  }, [user, creditRefreshTrigger]); // Listen for credit refresh triggers
 
   const fetchUsageStats = async () => {
     try {
@@ -66,27 +59,6 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error fetching usage stats:', error);
-    }
-  };
-
-  const fetchCreditStatus = async () => {
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001';
-      const url = `${apiUrl}/api/credit-system/status`;
-
-      const response = await fetch(url, {
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCreditStatus(data.data);
-      } else {
-        const errorText = await response.text();
-        console.error('Home page: Error fetching credit status:', response.status, errorText);
-      }
-    } catch (error) {
-      console.error('Home page: Error fetching credit status:', error);
     }
   };
 
@@ -116,7 +88,7 @@ export default function Home() {
       question: "What benefits come with the Elite Pack Membership?",
       answer: (
         <>
-          For $28.95/month or save 20% for yearly subscription, pack members unlock the full power of the Legacy of Love Dog Hub, plus:
+          For $19.95/month or save 20% for yearly subscription, pack members unlock the full power of the Legacy of Love Dog Hub, plus:
           <ul className="list-disc list-inside">
             <li>3,000 monthly credits ($30.00 value) for all features</li>
             <li>Secure storage and easy access to your dog's complete records</li>
@@ -192,7 +164,7 @@ export default function Home() {
     {
       id: "item-15",
       question: "How do I join Mr. White's Elite pack?",
-      answer: "Sign up on this website for $28.95/month or 20% off/year and begin your journey to joyful, harmonious companion care. You'll get 3,000 monthly credits ($30 value) plus access to all premium features. Share your pet's details and unlock a world of support."
+      answer: "Sign up on this website for $19.95/month or 20% off/year and begin your journey to joyful, harmonious companion care. You'll get 3,000 monthly credits ($30 value) plus access to all premium features. Share your pet's details and unlock a world of support."
     }
   ];
 
@@ -227,16 +199,17 @@ export default function Home() {
 
           <div className="w-full md:w-1/2 max-[1000px] max-[768px]:aspect-auto aspect-[652/596] h-full flex flex-col justify-between max-[768px]:justify-center">
             <div className="w-full flex flex-col gap-[40px] max-[1280px]:gap-[24px]">
-              <div className="w-full flex flex-col gap-[32px] max-[1300px]:gap-[18px]">
-                <h1 className="text-[44px]/12 font-semibold font-work-sans tracking-tighter">
+              <div className="w-full flex flex-col gap-[32px] max-[885px]:gap-[10px] max-[1300px]:gap-[18px] max-[768px]:gap-[32px]">
+                <h1 className="text-[44px]/12 font-semibold font-work-sans max-[1200px]:text-[32px] tracking-tighter max-[885px]:text-[32px] max-[768px]:text-[44px]/12">
                   Secrets of Paws and Humans, revealed they are.
                 </h1>
-                <p className="w-full min-[1440px]:w-[413px] font-medium text-[24px]/6 max-[1300px]:text-[18px] tracking-tighter max-[450px]:text-[24px]">
+                <p className="w-full min-[1440px]:w-[413px] font-medium text-[24px]/6 max-[1300px]:text-[18px] tracking-tighter max-[885px]:text-[14px] max-[450px]:text-[24px] max-[768px]:text-[24px]/6">
                   All the information for dogs and humans, packed into one hub.
                 </p>
               </div>
-              <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 max-[1200px]:gap-2">
-                <div className="">
+              <div className="flex gap-12 max-[1251px]:gap-4 max-[885px]:flex-col">
+
+                {/* <div className="">
                   <BsPatchCheckFill aria-hidden="true" className="inline-block mr-2 max-[1200px]:w-[14px] max-[1200px]:h-[14px]" />
                   <p className="inline-block max-[450px]:text-[16px] max-[1200px]:text-[14px] max-[1074px]:text-[12px]">All-in-One Solution</p>
                 </div>
@@ -251,7 +224,32 @@ export default function Home() {
                 <div className="">
                   <BsPatchCheckFill aria-hidden="true" className="inline-block mr-2 max-[1200px]:w-[14px] max-[1200px]:h-[14px]" />
                   <p className="inline-block max-[450px]:text-[16px] max-[1200px]:text-[14px] max-[1074px]:text-[12px]">100% human support</p>
+                </div> */}
+
+                <div className="flex flex-col gap-4">
+                  <h3>
+                    <BsPatchCheckFill aria-hidden="true" className="inline-block mr-2 max-[1200px]:w-[14px] max-[1200px]:h-[14px]" />
+                    <p className="inline-block max-[768px]:text-[16px] max-[1200px]:text-[14px] max-[1074px]:text-[12px]">All-in-One Solution</p>
+                  </h3>
+
+                  <h3>
+                    <BsPatchCheckFill aria-hidden="true" className="inline-block mr-2 max-[1200px]:w-[14px] max-[1200px]:h-[14px]" />
+                    <p className="inline-block max-[768px]:text-[16px] max-[1200px]:text-[14px] max-[1074px]:text-[12px]">Knowledge to strengthen your bond</p>
+                  </h3> 
                 </div>
+
+                <div className="flex flex-col gap-4">
+                  <h3>
+                    <BsPatchCheckFill aria-hidden="true" className="inline-block mr-2 max-[1200px]:w-[14px] max-[1200px]:h-[14px]" />
+                    <p className="inline-block max-[768px]:text-[16px] max-[1200px]:text-[14px] max-[1074px]:text-[12px]">For every dog & their human</p>
+                  </h3>
+
+                  <h3>
+                    <BsPatchCheckFill aria-hidden="true" className="inline-block mr-2 max-[1200px]:w-[14px] max-[1200px]:h-[14px]" />
+                    <p className="inline-block max-[768px]:text-[16px] max-[1200px]:text-[14px] max-[1074px]:text-[12px]">100% human support</p>
+                  </h3>
+                </div>
+
               </div>
               <div className="w-full relative max-[450px]:mb-10">
                 <Button onClick={() => router.push('/subscription')} className="max-[900px]:w-full w-[279px] h-[47px] text-[20px]">
@@ -279,7 +277,7 @@ export default function Home() {
       {/* SECTION 2 */}
 
       <div className=" bg-white/5">
-        <section className="max-w-[1440px] mx-auto min-h-screen py-16 flex flex-col md:flex-row justify-center md:justify-between gap-10  px-12 max-[1024px]:px-4 max-[450px]:px-3">
+        <section className="max-w-[1440px] mx-auto py-16 flex flex-col md:flex-row justify-center md:justify-between gap-10  px-12 max-[1024px]:px-4 max-[450px]:px-3">
           <div className="w-full flex flex-col items-center gap-[40px]">
             <FadeInSection className="w-full flex items-center justify-center">
               <h2 className="text-[24px] md:text-[32px] font-semibold">Preserve, Learn, and Honor Your Dog's Journey</h2>
@@ -310,7 +308,11 @@ export default function Home() {
                 delay={0.2}
               />
             </div>
-            <Button onClick={() => router.push('/my-hub')} className="w-full md:w-[253px] h-[47px] text-[20px]">
+            <Button onClick={() => {
+              // Store the intended destination for after login
+              localStorage.setItem('redirectAfterLogin', '/my-hub');
+              router.push('/my-hub');
+            }} className="w-full sm:w-[200px] md:w-[253px] h-[47px] text-[20px]">
               <ShakingIcon icon={<PiBoneFill className="!w-6 !h-6" />} />
               Read More
             </Button>
@@ -373,11 +375,14 @@ export default function Home() {
 
       {/* SECTION 4 */}
       <section className="max-w-[1440px] mx-auto min-h-screen py-16 px-12 max-[1024px]:px-4 max-[450px]:px-3">
+        <FadeInSection className="w-full mb-12">
+          <h2 className="text-[24px] md:text-[32px] font-semibold">The Benefits of Mr. White In Your Life</h2>
+        </FadeInSection>
 
         <div className="h-[740px] max-[900px]:h-auto w-full bg-white/10 rounded-sm flex flex-col p-8 mb-10 max-[550px]:p-6">
 
           <div className="text-[24px] max-[550px]:text-[18px] font-semibold font-work-sans border-b border-black pb-6 flex items-center gap-x-4">
-            <Image src="/assets/dog-icon-free.png" alt="dog-icon-free" width={100} height={100} className="w-10 h-10 max-[550px]:w-8 max-[550px]:h-8" />
+            <Image src="/assets/dog-icon-free.webp" alt="dog-icon-free" width={100} height={100} className="w-10 h-10 max-[550px]:w-8 max-[550px]:h-8" />
             <h1>1. For Companion Crew Pack Members (Free)</h1>
           </div>
 
@@ -537,6 +542,17 @@ export default function Home() {
 
         </div>
 
+        <Button
+          onClick={() => {
+            localStorage.setItem('redirectAfterLogin', '/subscription');
+            router.push('/subscription');
+          }}
+          className={`w-full mt-16 sm:w-fit md:w-[293px] mx-auto h-[47px] text-[20px] mb-1 flex items-center justify-center gap-2`}
+        >
+          <ShakingIcon icon={<LuCrown className="!w-6 !h-6" />} />
+          View Subscription
+        </Button>
+
       </section>
 
       {/* SECTION 5 */}
@@ -563,14 +579,20 @@ export default function Home() {
             </FadeInSection>
 
             <StepsAnimated direction="flex-col" background="bg-gradient-to-r from-white/10 from-10% to-black to-90%" />
-
-            <Button onClick={() => {
-              localStorage.setItem('redirectAfterLogin', '/subscription');
-              router.push('/login');
-            }} className="w-full md:w-[293px] h-[47px] text-[20px]">
-              <ShakingIcon icon={<TbLogin className="!w-6 !h-6" />} />
-              Sign Up & Login
-            </Button>
+            <div>
+              <Button
+                onClick={() => {
+                  localStorage.setItem('redirectAfterLogin', '/subscription');
+                  router.push('/login');
+                }}
+                disabled={!!user} // disables the button if `user` is truthy
+                className={`w-full md:w-[293px] h-[47px] text-[20px] mb-1 flex items-center justify-center gap-2 ${user ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+              >
+                <ShakingIcon icon={<TbLogin className="!w-6 !h-6" />} />
+                Sign Up & Login
+              </Button>
+              {user ? <p className="text-sm text-muted-foreground text-center md:text-left"> You're already logged in. </p> : ""}
+            </div>
           </div>
         </section>
       </div>
@@ -627,9 +649,9 @@ export default function Home() {
             title="Mr. White AI Buddy - LEGACY OF LOVE LIVING HUB"
             subtitle="Everything in the FREE Account Plus these Invaluable Services"
             description="Unlock an all-encompassing, AI-powered subscription designed to honor your companion's unique journey and simplify every aspect of their care. This seamless, thoughtfully crafted living hub combines advanced technology with decades of expertise to preserve memories, streamline health management, and nurture the extraordinary bond you share—making life safer, easier, and infinitely more meaningful for both of you."
-            price="$28.95/Month - Save 20% on yearly plan"
+            price="$19.95/Month - Save 20% on yearly plan"
             priceSubtext="Includes dedicated human support!"
-            amount={28.95}
+            amount={19.95}
             features={[
               {
                 title: "Comprehensive Memory & Care Archive",
@@ -700,7 +722,7 @@ export default function Home() {
 
             <div className="max-[900px]:w-full w-[425px] gap-2 bg-white/10 rounded-sm flex flex-col justify-between p-6">
               <p className="text-[20px] font-semibold font-work-sans text-[var(--mrwhite-primary-color)]">Still have questions?</p>
-              <p className="text-[16px] font-light font-public-sans">Cant&apos;t find your question? Contact us directly!</p>
+              <p className="text-[16px] font-light font-public-sans">Can&apos;t find your question? Contact us directly!</p>
               <Button onClick={() => router.push('/contact')} className="w-[168px] h-[39px] text-[20px] font-medium font-work-sans">
                 <ShakingIcon icon={<IoChatbubble className="!w-6 !h-6" />} />
                 Contact Us

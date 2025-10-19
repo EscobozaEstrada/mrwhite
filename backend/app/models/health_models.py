@@ -189,6 +189,9 @@ class HealthReminder(db.Model):
     days_before_reminder = db.Column(db.Integer, default=7)
     hours_before_reminder = db.Column(db.Integer, default=0)
     
+    # Priority level for reminders
+    priority = db.Column(db.String(20), default='medium')  # low, medium, high, critical
+    
     # Recurring reminder settings (for AI-created series)
     recurrence_type = db.Column(db.Enum(RecurrenceType), default=RecurrenceType.NONE)
     recurrence_interval = db.Column(db.Integer, default=1)  # Every X days/weeks/months
@@ -223,6 +226,12 @@ class HealthReminder(db.Model):
             return datetime.combine(self.reminder_date, self.reminder_time)
         elif self.reminder_date:
             return datetime.combine(self.reminder_date, time(9, 0))
+        elif self.due_date and self.due_time:
+            # Fallback to due_date and due_time if reminder_date/time not set
+            return datetime.combine(self.due_date, self.due_time)
+        elif self.due_date:
+            # Fallback to due_date with default time
+            return datetime.combine(self.due_date, time(9, 0))
         return None
     
     def should_send_notification(self):
@@ -231,8 +240,49 @@ class HealthReminder(db.Model):
         if not reminder_datetime:
             return False
         
-        now = datetime.now()
-        return (now >= reminder_datetime and 
+        # 🎯 CRITICAL FIX: Handle timezone properly
+        now = datetime.utcnow()
+        
+        # If reminder_datetime is naive, we need to convert it considering user's timezone
+        if reminder_datetime.tzinfo is None:
+            # Get the user to access their timezone
+            from app.models.user import User
+            user = User.query.get(self.user_id)
+            
+            if user and user.timezone:
+                try:
+                    import pytz
+                    # Convert reminder time from user's timezone to UTC
+                    user_tz = pytz.timezone(user.timezone)
+                    
+                    # Localize the naive datetime to user's timezone
+                    try:
+                        reminder_datetime_local = user_tz.localize(reminder_datetime)
+                    except:
+                        # Handle DST transitions
+                        reminder_datetime_local = user_tz.localize(reminder_datetime, is_dst=None)
+                    
+                    # Convert to UTC
+                    reminder_datetime_utc = reminder_datetime_local.utctimetuple()
+                    reminder_datetime_utc = datetime(*reminder_datetime_utc[:6])
+                    
+                    # Check if it's time to send (within 1 hour window for reliability)
+                    time_diff = (now - reminder_datetime_utc).total_seconds()
+                    is_time_to_send = abs(time_diff) <= 3600  # Within 1 hour window
+                    
+                except Exception as e:
+                    # Fallback: more lenient timing (±6 hours to handle timezone issues)
+                    time_diff = (now - reminder_datetime).total_seconds()
+                    is_time_to_send = abs(time_diff) <= 21600  # Within 6 hours
+            else:
+                # No timezone info: be very lenient with timing
+                time_diff = (now - reminder_datetime).total_seconds()
+                is_time_to_send = abs(time_diff) <= 21600  # Within 6 hours
+        else:
+            # Timezone-aware comparison
+            is_time_to_send = now >= reminder_datetime
+        
+        return (is_time_to_send and 
                 self.status == ReminderStatus.PENDING and
                 (not self.last_notification_sent or 
                  (now - self.last_notification_sent).total_seconds() > 3600))  # At least 1 hour gap

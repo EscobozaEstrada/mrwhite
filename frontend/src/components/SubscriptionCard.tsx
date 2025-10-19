@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { CheckCircle, Crown, Star, Check, Coins, Zap, Info } from 'lucide-react';
 import { FaCircleInfo } from "react-icons/fa6";
+import toast from '@/components/ui/sound-toast';
 
 interface SubscriptionCardProps {
     title: string;
@@ -34,7 +35,7 @@ const SubscriptionCard = ({
     priceSubtext,
     features,
     isPremium = false,
-    amount = 28.95,
+    amount = 19.95,
 }: SubscriptionCardProps) => {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
@@ -78,13 +79,22 @@ const SubscriptionCard = ({
         if (!user) {
             // Store the intended destination for redirect after login
             localStorage.setItem('redirectAfterLogin', '/subscription');
-            router.push('/login');
+            router.push('/signup');
             return;
         }
 
         // Prevent multiple subscriptions
         if (user?.is_premium && user?.subscription_status === 'active') {
-            alert('You already have an active Elite subscription!');
+            toast.success('You already have an active Elite subscription!', {
+                icon: <PiBoneFill className="!w-6 !h-6" />,
+                duration: 3000,
+                position: 'bottom-center',
+                style: {
+                    background: '#333',
+                    color: '#fff',
+                    border: '1px solid #D3B86A',
+                }
+            });
             return;
         }
 
@@ -99,7 +109,7 @@ const SubscriptionCard = ({
             setIsLoading(true);
             const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL
                 ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/payment/create-checkout-session`
-                : 'http://localhost:5001/api/payment/create-checkout-session';
+                : `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/payment/create-checkout-session`;
 
             const response = await fetch(apiUrl, {
                 method: 'POST',

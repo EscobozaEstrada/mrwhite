@@ -71,8 +71,8 @@ class FCMService:
         if not url:
             return "https://mrwhiteaibuddy.com/reminders"  # Default HTTPS URL
         
-        # For localhost, use a default HTTPS URL instead
-        if "localhost" in url or "127.0.0.1" in url:
+        # For 34.228.255.83, use a default HTTPS URL instead
+        if os.getenv('FRONTEND_URL') in url or "127.0.0.1" in url:
             return "https://mrwhiteaibuddy.com/reminders"
         
         # Ensure HTTPS

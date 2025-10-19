@@ -3,34 +3,41 @@
 import { usePathname } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { animate, inView, scroll, stagger } from "motion"
-
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { TbLogin } from "react-icons/tb"
+import { TbLogin, TbPhotoSquareRounded } from "react-icons/tb"
 import { IoChatbubble } from "react-icons/io5"
 import { RxHamburgerMenu } from "react-icons/rx"
 import { IoMdClose } from "react-icons/io"
 import { IoChevronDown } from "react-icons/io5"
+import { FiEdit2, FiX } from "react-icons/fi"
 import ImagePop from "@/components/ImagePop"
 import { useRouter } from "next/navigation"
 import ShakingIcon from "./ShakingIcon"
 import { useAuth } from "@/context/AuthContext"
 import { CreditDisplay } from "@/components/CreditDisplay"
-import { Coins, Crown, User, Settings, LogOut, Image, Home, Info, BookOpen, MessageSquare, Calendar, Gift, MapPin, Sparkles } from "lucide-react"
+import { Coins, Crown, User, Settings, LogOut, Home, Info, BookOpen, MessageSquare, Calendar, Gift, MapPin, Sparkles, AlertTriangle } from "lucide-react"
 import axios from "axios"
 import Script from "next/script"
 import { FaRoad } from "react-icons/fa"
+import toast from "@/components/ui/sound-toast"
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const isActive = (path: string) => pathname === path;
-  const { user, setUser } = useAuth();
+  const { user, setUser, refreshUser } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -40,6 +47,9 @@ export default function Navbar() {
       }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false);
+      }
+      if (deleteDialogRef.current && !deleteDialogRef.current.contains(event.target as Node)) {
+        setShowDeleteConfirm(false);
       }
     }
 
@@ -54,8 +64,8 @@ export default function Navbar() {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/logout`, {}, { withCredentials: true })
       setUser(null)
 
-      // Check if the current path includes '/talk/' and redirect to login if it does
-      if (pathname.includes('/talk/')) {
+      // Check if the current path includes '/chat/' and redirect to login if it does
+      if (pathname.includes('/chat/')) {
         router.push('/login');
       }
       setMobileMenuOpen(false);
@@ -65,22 +75,103 @@ export default function Navbar() {
     }
   }
 
-  // Function to safely navigate to talk page
-  const navigateToTalk = () => {
-    if (user?.id) {
-      // Use user ID if available
-      router.push(`/talk/${user.id}/conversation/latest`);
-    } else {
-      // Fallback to a default path if user ID is undefined
-      router.push('/talk');
-    }
-    setMobileMenuOpen(false);
-  }
+  // Function to safely navigate to chat page
+  // const navigateToTalk = () => {
+  //   if (user?.id) {
+  //     // Use user ID if available
+  //     router.push(`/talk/${user.id}/conversation/latest`);
+  //   } else {
+  //     // Fallback to a default path if user ID is undefined
+  //     router.push('/talk');
+  //   }
+  //   setMobileMenuOpen(false);
+  // }
 
   const navigateTo = (path: string) => {
     router.push(path);
     setMobileMenuOpen(false);
   }
+
+  const handleDogImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+
+    const file = e.target.files[0];
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB');
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/upload-dog-image`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          withCredentials: true,
+        }
+      );
+
+      if (response.data.success) {
+        // After successful upload, refresh user data to get updated dog_image
+        await refreshUser();
+        toast.success('Dog image uploaded successfully');
+      } else {
+        toast.error(response.data.message || 'Failed to upload image');
+      }
+    } catch (error) {
+      console.error('Error uploading dog image:', error);
+      toast.error('Failed to upload image. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveDogImage = async () => {
+    try {
+      setShowDeleteConfirm(false);
+      setRemoving(true);
+
+      const response = await axios.delete(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/remove-dog-image`,
+        {
+          withCredentials: true,
+        }
+      );
+
+      if (response.data.success) {
+        // After successful deletion, refresh user data
+        await refreshUser();
+        toast.success('Dog image removed successfully');
+        
+        // Reset the file input value to allow re-uploading the same file
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } else {
+        toast.error(response.data.message || 'Failed to remove image');
+      }
+    } catch (error) {
+      console.error('Error removing dog image:', error);
+      toast.error('Failed to remove image. Please try again.');
+    } finally {
+      setRemoving(false);
+    }
+  };
 
   return (
     <>
@@ -100,7 +191,16 @@ export default function Navbar() {
         })
       }} />
 
-      <header className="bg-black border-b border-neutral-800/50 fixed top-0 left-0 right-0 z-50">
+      {/* Hidden file input for dog image upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleDogImageUpload}
+      />
+
+      <header className="bg-black border-b border-neutral-800/50 fixed top-0 left-0 right-0 z-50 select-none">
         <div className="h-[70px] sm:h-[80px] md:h-[95px]  flex justify-between items-center px-3 sm:px-4 md:px-8 max-w-[1440px] mx-auto z-50">
           <div className="flex gap-[10px] sm:gap-[20px] md:gap-[50px] items-center">
             <div className="flex items-center gap-[8px] sm:gap-[10px]">
@@ -114,12 +214,12 @@ export default function Navbar() {
               </div>
               <div className="cursor-pointer" onClick={() => router.push('/')}>
                 <h1 className="text-[18px] sm:text-[20px] md:text-[21px]/6 font-semibold font-work-sans tracking-tighter text-[var(--mrwhite-primary-color)]">Mr. White</h1>
-                <p className="text-[10px] sm:text-[11px] font-light font-public-sans tracking-tight text-white/80">Guide to all paws</p>
+                <p className="text-[10px] sm:text-[11px] font-light font-public-sans tracking-tight text-white/80">AI Assistant for Dog Care & Beyond</p>
               </div>
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="max-[1060px]:hidden flex gap-[20px] lg:gap-[40px]" aria-label="Main Navigation">
+            <nav className="max-[1060px]:hidden max-[1250px]:gap-[20px] flex gap-[40px]" aria-label="Main Navigation">
               <Link className={`font-semibold text-[18px] lg:text-[20px] ${isActive("/") ? "active-link" : ""} hover:scale-105 transition-all duration-300`} href="/" aria-current={isActive("/") ? "page" : undefined}>
                 Home
               </Link>
@@ -132,7 +232,7 @@ export default function Navbar() {
                 Subscription
               </Link>
 
-              {user && (
+              {/* {user && (
                 <>
                   <Link
                     className={`font-semibold text-[18px] lg:text-[20px] ${pathname.startsWith("/talk") ? "active-link" : ""} hover:scale-105 transition-all duration-300`}
@@ -142,12 +242,12 @@ export default function Navbar() {
                     Talk
                   </Link>
                 </>
-              )}
+              )} */}
 
               {/* More Dropdown */}
               <div className="relative" ref={dropdownRef}>
                 <button
-                  className={`font-semibold text-[18px] lg:text-[20px] flex items-center gap-1 ${isActive("/questbook") || isActive("/product") || isActive("/hub") || isActive("/payment") || isActive("/reminders") ? "active-link" : ""
+                  className={`font-semibold text-[18px] lg:text-[20px] flex items-center cursor-pointer gap-1 ${isActive("/questbook") || isActive("/product") || isActive("/hub") || isActive("/payment") || isActive("/reminders") || isActive("/book") ? "active-link" : ""
                     } hover:scale-105 transition-all duration-300 transform-gpu origin-center`}
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                   aria-expanded={dropdownOpen}
@@ -159,6 +259,25 @@ export default function Navbar() {
                 {dropdownOpen && (
                   <div id="dropdown-menu" className="absolute top-full left-0 mt-2 w-40 bg-black/95 border border-neutral-800 rounded-md shadow-lg z-50 overflow-hidden max-h-[80vh] overflow-y-auto" role="menu">
                     {user && (
+                      <>                      
+                      {/* <Link
+                        className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/talk") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
+                        href="/talk/conversation/new-chat"
+                        onClick={() => setDropdownOpen(false)}
+                        role="menuitem"
+                        aria-current={isActive("/talk") ? "page" : undefined}
+                      >
+                        Talk
+                      </Link> */}
+                      <Link
+                        className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/chat") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
+                        href="/chat"
+                        onClick={() => setDropdownOpen(false)}
+                        role="menuitem"
+                        aria-current={isActive("/chat") ? "page" : undefined}
+                      >
+                        Chat
+                      </Link>
                       <Link
                         className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/reminders") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
                         href="/reminders"
@@ -166,10 +285,11 @@ export default function Navbar() {
                         role="menuitem"
                         aria-current={isActive("/reminders") ? "page" : undefined}
                       >
-                        Reminders
-                      </Link>
+                          Reminders
+                        </Link>
+                      </>
                     )}
-                    <Link
+                    {/* <Link
                       className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/questbook") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
                       href="/questbook"
                       onClick={() => setDropdownOpen(false)}
@@ -177,8 +297,8 @@ export default function Navbar() {
                       aria-current={isActive("/questbook") ? "page" : undefined}
                     >
                       Questbook
-                    </Link>
-                    <Link
+                    </Link> */}
+                    {/* <Link
                       className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/product") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
                       href="/product"
                       onClick={() => setDropdownOpen(false)}
@@ -186,7 +306,7 @@ export default function Navbar() {
                       aria-current={isActive("/product") ? "page" : undefined}
                     >
                       Product
-                    </Link>
+                    </Link> */}
                     <Link
                       className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/my-hub") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
                       href="/my-hub"
@@ -206,6 +326,15 @@ export default function Navbar() {
                       The Way
                     </Link>
                     <Link
+                      className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/book") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
+                      href="/book"
+                      onClick={() => setDropdownOpen(false)}
+                      role="menuitem"
+                      aria-current={isActive("/book") ? "page" : undefined}
+                    >
+                      Book
+                    </Link>
+                    {/* <Link
                       className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/events") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
                       href="/events"
                       onClick={() => setDropdownOpen(false)}
@@ -213,8 +342,8 @@ export default function Navbar() {
                       aria-current={isActive("/events") ? "page" : undefined}
                     >
                       Events
-                    </Link>
-                    <Link
+                    </Link> */}
+                    {user && <Link
                       className={`block px-4 py-2 hover:bg-neutral-800 font-semibold text-[16px] ${isActive("/gallery") ? "text-[var(--mrwhite-primary-color)]" : ""}`}
                       href="/gallery"
                       onClick={() => setDropdownOpen(false)}
@@ -222,7 +351,7 @@ export default function Navbar() {
                       aria-current={isActive("/gallery") ? "page" : undefined}
                     >
                       Gallery
-                    </Link>
+                    </Link>}
                   </div>
                 )}
               </div>
@@ -240,18 +369,105 @@ export default function Navbar() {
                 <Button
                   variant="ghost"
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="px-3 lg:px-4 py-1 lg:py-2 flex items-center w-[120px] lg:w-[140px] h-[35px] lg:h-[39px] gap-[8px] lg:gap-[10px] text-[16px] lg:text-[20px] font-medium font-work-sans"
+                  className="px-3 lg:px-4 py-1 lg:py-2 flex items-center h-[35px] lg:h-[39px] gap-[8px] lg:gap-[10px] text-[16px] lg:text-[20px] font-medium font-work-sans"
                 >
-                  <User className="!w-5 !h-5 lg:!w-6 lg:!h-6" aria-hidden="true" />
+                  {user.dog_image ? (
+                    <div className="relative w-5 h-5 lg:w-6 lg:h-6 rounded-full overflow-hidden">
+                      <Image
+                        src={user.dog_image}
+                        alt="Dog"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <User className="!w-5 !h-5 lg:!w-6 lg:!h-6" aria-hidden="true" />
+                  )}
                   <span className="max-[1200px]:hidden">Account</span>
                   <IoChevronDown className={`transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </Button>
 
                 {userMenuOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-black/95 border border-neutral-800 rounded-md shadow-lg z-50 overflow-hidden max-h-[80vh] overflow-y-auto">
+                  <div className="absolute top-full right-0 mt-2 bg-black/95 border border-neutral-800 rounded-md shadow-lg z-50 max-h-[80vh] overflow-y-auto">
                     <div className="px-4 py-3 border-b border-neutral-800">
                       <div className="text-sm font-medium text-white">{user.name}</div>
                       <div className="text-xs text-gray-400">{user.email}</div>
+                      <div className="flex items-center gap-2 mt-2 mb-2">
+                        {user.dog_image ? (
+                          <div className="relative w-12 h-12">
+                            {/* Circular container for image only */}
+                            <div className="w-full h-full rounded-full overflow-hidden bg-neutral-800 relative">
+                              <Image
+                                src={user.dog_image}
+                                alt="Dog"
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+
+                            {/* Absolute button placed outside the circle */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDeleteConfirm(true);
+                              }}
+                              disabled={removing}
+                              className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 flex items-center justify-center z-10 cursor-pointer"
+                              aria-label="Remove dog image"
+                            >
+                              <FiX className="w-3 h-3 text-white" />
+                            </button>
+
+                            {/* Small confirmation popover */}
+                            {showDeleteConfirm && (
+                              <div
+                                ref={deleteDialogRef}
+                                className="absolute top-full left-0 w-38 bg-neutral-900 border border-neutral-700 rounded-md p-2 shadow-lg z-10"
+                              >
+                                <p className="text-xs text-gray-300 mb-2">
+                                  Remove this dog image?
+                                </p>
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShowDeleteConfirm(false);
+                                    }}
+                                    className="text-xs bg-neutral-800 hover:bg-neutral-700 px-2 py-1 rounded"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveDogImage();
+                                    }}
+                                    disabled={removing}
+                                    className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-white"
+                                  >
+                                    {removing ? 'Removing...' : 'Remove'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center">
+                            <User className="w-6 h-6" />
+                          </div>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          disabled={uploading || removing}
+                          className="flex items-center cursor-pointer tracking-tighter text-xs bg-neutral-700/50 rounded-md py-1 gap-1 px-1 text-gray-300 hover:text-white"
+                        >
+                          <FiEdit2 className="w-3 h-3" />
+                          {uploading ? 'Uploading...' : 'Edit dog photo'}
+                        </button>
+                      </div>
                       {user.is_premium && (
                         <div className="flex items-center gap-1 text-xs text-yellow-400 mt-1">
                           <Crown className="w-3 h-3" />
@@ -306,7 +522,7 @@ export default function Navbar() {
               </Button>
             )}
 
-            <Button onClick={() => router.push('/contact')} className="px-3 lg:px-4 py-1 lg:py-2 flex items-center w-[120px] lg:w-[140px] h-[35px] lg:h-[39px] gap-[8px] lg:gap-[10px] text-[16px] lg:text-[20px] font-medium font-work-sans">
+            <Button onClick={() => router.push('/contact')} className="px-3 lg:px-4 py-1 lg:py-2 flex items-center w-[120px] hover:bg-[var(--mrwhite-primary-color)]/80 lg:w-[140px] h-[35px] lg:h-[39px] gap-[8px] lg:gap-[10px] text-[16px] lg:text-[20px] font-medium font-work-sans">
               <ShakingIcon icon={<IoChatbubble className="w-[16px] h-[16px] lg:w-[20px] lg:h-[20px]" aria-hidden="true" />} />
               Contact
             </Button>
@@ -315,7 +531,7 @@ export default function Navbar() {
           {/* Mobile Menu Button */}
           <Button
             variant="ghost"
-            className="max-[1060px]:flex hidden p-2 hover:bg-neutral-800/50 transition-colors"
+            className="max-[1060px]:flex hidden bg-neutral-800 p-2 hover:bg-neutral-800/50 transition-colors"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
@@ -328,7 +544,7 @@ export default function Navbar() {
           {mobileMenuOpen && (
             <div
               id="mobile-menu"
-              className="min-h-screen fixed inset-0 z-50 bg-black/98 backdrop-blur-sm overflow-y-auto transition-opacity duration-300 ease-in-out"
+              className="min-h-screen fixed inset-0 z-50 bg-black/98 backdrop-blur-sm overflow-y-auto transition-opacity duration-300 ease-in-out custom-scrollbar"
               role="dialog"
               aria-modal="true"
               ref={(el) => {
@@ -408,7 +624,7 @@ export default function Navbar() {
 
                   {user && (
                     <>
-                      <div className="w-full menu-item">
+                      {/* <div className="w-full menu-item">
                         <Link
                           className={`font-semibold text-[20px] ${pathname.startsWith("/talk") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
                           href={`/talk/conversation/new-chat`}
@@ -418,31 +634,54 @@ export default function Navbar() {
                           <MessageSquare className="mr-3 w-5 h-5" />
                           Talk
                         </Link>
-                      </div>
-
+                      </div> */}
                       <div className="w-full menu-item">
                         <Link
-                          className={`font-semibold text-[20px] ${pathname.startsWith("/account") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
-                          href="/account/credits"
+                          className={`font-semibold text-[20px] ${pathname.startsWith("/chat") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
+                          href="/chat"
                           onClick={() => setMobileMenuOpen(false)}
-                          aria-current={pathname.startsWith("/account") ? "page" : undefined}
+                          aria-current={pathname.startsWith("/chat") ? "page" : undefined}
                         >
-                          <User className="mr-3 w-5 h-5" />
-                          Account
+                          <MessageSquare className="mr-3 w-5 h-5" />
+                          Chat
                         </Link>
                       </div>
 
                       <div className="w-full menu-item">
+                        <Link
+                          className={`font-semibold text-[20px] ${pathname.startsWith("/account/credits") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
+                          href="/account/credits"
+                          onClick={() => setMobileMenuOpen(false)}
+                          aria-current={pathname.startsWith("/account/credits") ? "page" : undefined}
+                        >
+                          <User className="mr-3 w-5 h-5" />
+                          Credits
+                        </Link>
+                      </div>
+
+                      <div className="w-full menu-item">
+                        <Link
+                          className={`font-semibold text-[20px] ${pathname.startsWith("/account/settings") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
+                          href="/account/settings"
+                          onClick={() => setMobileMenuOpen(false)}
+                          aria-current={pathname.startsWith("/account/settings") ? "page" : undefined}
+                        >
+                          <Settings className="mr-3 w-5 h-5" />
+                          Account Settings
+                        </Link>
+                      </div>
+
+                      {user && <div className="w-full menu-item">
                         <Link
                           className={`font-semibold text-[20px] ${pathname === "/gallery" ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
                           href="/gallery"
                           onClick={() => setMobileMenuOpen(false)}
                           aria-current={pathname === "/gallery" ? "page" : undefined}
                         >
-                          <Image className="mr-3 w-5 h-5" />
+                          <TbPhotoSquareRounded className="mr-3 w-5 h-5" />
                           Gallery
                         </Link>
-                      </div>
+                      </div>}
 
                       <div className="w-full menu-item">
                         <Link
@@ -460,7 +699,7 @@ export default function Navbar() {
 
                   <div className="w-full h-px bg-neutral-800/70 my-2"></div>
 
-                  <div className="w-full menu-item">
+                  {/* <div className="w-full menu-item">
                     <Link
                       className={`font-semibold text-[20px] ${isActive("/questbook") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
                       href="/questbook"
@@ -470,9 +709,9 @@ export default function Navbar() {
                       <BookOpen className="mr-3 w-5 h-5" />
                       Questbook
                     </Link>
-                  </div>
+                  </div> */}
 
-                  <div className="w-full menu-item">
+                  {/* <div className="w-full menu-item">
                     <Link
                       className={`font-semibold text-[20px] ${isActive("/product") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
                       href="/product"
@@ -482,7 +721,7 @@ export default function Navbar() {
                       <Gift className="mr-3 w-5 h-5" />
                       Product
                     </Link>
-                  </div>
+                  </div> */}
 
                   <div className="w-full menu-item">
                     <Link
@@ -510,6 +749,18 @@ export default function Navbar() {
 
                   <div className="w-full menu-item">
                     <Link
+                      className={`font-semibold text-[20px] ${isActive("/book") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
+                      href="/book"
+                      onClick={() => setMobileMenuOpen(false)}
+                      aria-current={isActive("/book") ? "page" : undefined}
+                    >
+                      <BookOpen className="mr-3 w-5 h-5" />
+                      Book
+                    </Link>
+                  </div>
+
+                  {/* {user && <div className="w-full menu-item">
+                    <Link
                       className={`font-semibold text-[20px] ${isActive("/events") ? "bg-neutral-800/70 border-l-4 border-[var(--mrwhite-primary-color)]" : ""} w-full px-3 py-2 hover:bg-neutral-800/50 rounded-md transition-colors duration-200 flex items-center`}
                       href="/events"
                       onClick={() => setMobileMenuOpen(false)}
@@ -518,7 +769,7 @@ export default function Navbar() {
                       <Sparkles className="mr-3 w-5 h-5" />
                       Events
                     </Link>
-                  </div>
+                  </div>} */}
 
                   <div className="w-full h-px bg-neutral-800/70 my-2"></div>
 

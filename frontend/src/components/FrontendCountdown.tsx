@@ -273,32 +273,32 @@ export default function FrontendCountdown({
                 {countdown.isOverdue ? (
                     <AlertCircle className="w-5 h-5 text-red-500" />
                 ) : countdown.urgency === 'critical' ? (
-                    <Clock className="w-5 h-5 animate-pulse" style={{ color: countdown.color }} />
+                    <Clock className="w-3 h-3 animate-pulse" style={{ color: countdown.color }} />
                 ) : (
-                    <Clock className="w-5 h-5" style={{ color: countdown.color }} />
+                    <Clock className="w-3 h-3" style={{ color: countdown.color }} />
                 )}
 
                 <span
-                    className="font-semibold text-lg"
+                    className="font-semibold text-xs"
                     style={{ color: countdown.color }}
                 >
                     {countdown.formatted}
                 </span>
             </div>
 
-            {!countdown.isOverdue && countdown.urgency === 'critical' && (
+            {/* {!countdown.isOverdue && countdown.urgency === 'critical' && (
                 <div className="flex items-center gap-2 text-sm font-mono opacity-75">
                     {countdown.days > 0 && <span>{countdown.days}d</span>}
                     {countdown.hours > 0 && <span>{countdown.hours}h</span>}
                     <span>{countdown.minutes}m</span>
                     <span className="animate-pulse">{countdown.seconds}s</span>
                 </div>
-            )}
+            )} */}
 
-            <div className="text-sm text-gray-500">
+            {/* <div className="text-sm text-gray-500">
                 <Calendar className="w-4 h-4 inline mr-1" />
                 {countdown.dueTimeOnly}
-            </div>
+            </div> */}
         </div>
     );
 }

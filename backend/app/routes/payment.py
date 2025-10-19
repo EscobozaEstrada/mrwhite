@@ -58,13 +58,13 @@ def create_payment():
 def create_checkout_session():
     # Get the origin from the request
     origin = request.headers.get('Origin', '')
-    allowed_origins = [os.getenv('FRONTEND_URL', 'http://localhost:3000'), 'http://localhost:3000', 'http://localhost:3005']
+    allowed_origins = [os.getenv('FRONTEND_URL')]
     
     # Use the actual origin if it's in the allowed list, otherwise use the configured frontend URL
     if origin in allowed_origins:
         cors_origin = origin
     else:
-        cors_origin = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        cors_origin = os.getenv('FRONTEND_URL')
     
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
@@ -92,8 +92,8 @@ def create_checkout_session():
                 },
             ],
             mode='subscription',
-            success_url=request.json.get('success_url', os.getenv('FRONTEND_URL', 'http://localhost:3000') + '/payment-success?amount=28.95&type=subscription'),
-            cancel_url=request.json.get('cancel_url', os.getenv('FRONTEND_URL', 'http://localhost:3000') + '/subscription'),
+            success_url=request.json.get('success_url', os.getenv('FRONTEND_URL') + '/payment-success?amount=19.95&type=subscription'),
+            cancel_url=request.json.get('cancel_url', os.getenv('FRONTEND_URL') + '/subscription'),
             client_reference_id=user_id,  # Store user ID for webhook
             customer_email=user_email,    # Pre-fill customer email
             metadata={
@@ -266,6 +266,8 @@ def webhook():
     
     logging.info(f"Webhook received - Signature: {sig_header[:50] if sig_header else 'None'}...")
     logging.info(f"Payload size: {len(payload)} bytes")
+    logging.info(f"Webhook secret configured: {bool(endpoint_secret)}")
+    logging.info(f"Webhook secret length: {len(endpoint_secret) if endpoint_secret else 0}")
     
     try:
         event = None
@@ -366,6 +368,7 @@ def handle_checkout_session_completed(session):
                 # Update user subscription status
                 user.is_premium = True
                 user.subscription_status = 'active'  # Set subscription status
+                user.subscription_tier = 'elite'  # Fix: Update subscription tier
                 user.stripe_customer_id = customer_id
                 user.stripe_subscription_id = subscription_id
                 
@@ -375,16 +378,62 @@ def handle_checkout_session_completed(session):
                 user.last_payment_date = datetime.utcnow()
                 user.payment_failed = False  # Reset any previous payment failures
                 
-                # Add initial Elite credits if this is a new subscription
+                # Set subscription end date by fetching from Stripe
                 try:
-                    credit_service = CreditSystemService()
-                    success, message, credits_added = credit_service.refill_monthly_credits(user.id)
-                    if success:
-                        logging.info(f"Added {credits_added} initial credits to user {client_reference_id}")
-                    else:
-                        logging.warning(f"Failed to add initial credits: {message}")
+                    if subscription_id:
+                        import stripe
+                        import os
+                        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+                        stripe_sub = stripe.Subscription.retrieve(subscription_id)
+                        
+                        # Access current_period_end from subscription items (correct location in Stripe API)
+                        period_end_timestamp = None
+                        if stripe_sub and hasattr(stripe_sub, 'items') and hasattr(stripe_sub.items, 'data') and stripe_sub.items.data:
+                            first_item = stripe_sub.items.data[0]
+                            if hasattr(first_item, 'current_period_end') and first_item.current_period_end:
+                                period_end_timestamp = first_item.current_period_end
+                        elif stripe_sub and hasattr(stripe_sub, 'to_dict'):
+                            # Fallback: use dictionary access to get items
+                            sub_dict = stripe_sub.to_dict()
+                            items = sub_dict.get('items', {})
+                            items_data = items.get('data', [])
+                            if items_data and len(items_data) > 0:
+                                first_item = items_data[0]
+                                period_end_timestamp = first_item.get('current_period_end')
+                        
+                        if period_end_timestamp:
+                            user.subscription_end_date = datetime.fromtimestamp(period_end_timestamp)
+                            logging.info(f"Set subscription end date to {user.subscription_end_date} for user {client_reference_id}")
+                        else:
+                            logging.warning(f"Could not retrieve current_period_end for subscription {subscription_id}")
                 except Exception as e:
-                    logging.error(f"Error adding initial credits: {str(e)}")
+                    logging.error(f"Error setting subscription end date: {str(e)}")
+                    logging.error(f"Subscription object type: {type(stripe_sub) if 'stripe_sub' in locals() else 'N/A'}")
+                    # Continue with the process even if setting end date fails
+                
+                # Add initial 3000 credits immediately upon subscription
+                from app.services.credit_system_service import CreditSystemService
+                credit_service = CreditSystemService()
+                
+                initial_credits = 3000
+                credit_added = credit_service.add_credits(
+                    int(client_reference_id),
+                    initial_credits,
+                    'subscription_bonus',
+                    {
+                        'subscription_id': subscription_id,
+                        'checkout_session_id': session.get('id'),
+                        'source': 'initial_subscription',
+                        'amount_paid': amount_total
+                    }
+                )
+                
+                if credit_added:
+                    logging.info(f"✅ Added {initial_credits} initial credits to user {client_reference_id}")
+                    logging.info(f"✅ Subscription setup complete for user {client_reference_id}. Initial credits added, monthly refills on anniversary dates.")
+                else:
+                    logging.error(f"❌ Failed to add initial credits to user {client_reference_id}")
+                    logging.info(f"✅ Subscription setup complete for user {client_reference_id}. Monthly credits will be available on anniversary dates.")
                 
                 db.session.commit()
                 logging.info(f"User {client_reference_id} subscription activated: {subscription_id}, amount: ${amount_total/100:.2f}")
@@ -485,12 +534,23 @@ def handle_subscription_created(subscription):
         customer_id = subscription.get('customer')
         subscription_id = subscription.get('id')
         status = subscription.get('status')
+        current_period_end = subscription.get('current_period_end')
         
         # Find user by customer ID
         user = User.query.filter_by(stripe_customer_id=customer_id).first()
         if user:
             user.stripe_subscription_id = subscription_id
             user.subscription_status = status
+            
+            # Set subscription dates
+            from datetime import datetime
+            user.subscription_start_date = datetime.utcnow()
+            
+            # Set subscription end date if available
+            if current_period_end:
+                user.subscription_end_date = datetime.fromtimestamp(current_period_end)
+                logging.info(f"Set subscription end date to {user.subscription_end_date}")
+            
             db.session.commit()
             logging.info(f"Subscription created for user {user.id}: {subscription_id}")
         else:
@@ -504,17 +564,32 @@ def handle_subscription_updated(subscription):
     try:
         customer_id = subscription.get('customer')
         status = subscription.get('status')
+        current_period_end = subscription.get('current_period_end')
         
         # Find user by customer ID
         user = User.query.filter_by(stripe_customer_id=customer_id).first()
         if user:
             user.subscription_status = status
+            
             # If subscription is active, ensure user has premium status
             if status == 'active':
                 user.is_premium = True
+                
+                # Update subscription end date for active subscriptions
+                if current_period_end:
+                    from datetime import datetime
+                    user.subscription_end_date = datetime.fromtimestamp(current_period_end)
+                    logging.info(f"Updated subscription end date to {user.subscription_end_date}")
+                
             # If subscription is canceled or past_due, handle accordingly
             elif status in ['canceled', 'unpaid', 'past_due']:
                 user.is_premium = False
+                
+                # For canceled subscriptions, make sure we have the end date
+                if status == 'canceled' and current_period_end:
+                    from datetime import datetime
+                    user.subscription_end_date = datetime.fromtimestamp(current_period_end)
+                    logging.info(f"Set cancellation end date to {user.subscription_end_date}")
             
             db.session.commit()
             logging.info(f"Subscription updated for user {user.id}: {status}")
@@ -562,16 +637,21 @@ def handle_invoice_paid(invoice):
                 user.is_premium = True
                 user.subscription_status = 'active'
                 
-                # Refill monthly credits for recurring subscription payments
+                # Update subscription end date by fetching the latest data from Stripe
                 try:
-                    credit_service = CreditSystemService()
-                    success, message, credits_added = credit_service.refill_monthly_credits(user.id)
-                    if success:
-                        logging.info(f"Refilled {credits_added} monthly credits for user {user.id}")
-                    else:
-                        logging.warning(f"Failed to refill credits: {message}")
+                    stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+                    stripe_sub = stripe.Subscription.retrieve(subscription_id)
+                    
+                    if stripe_sub and stripe_sub.current_period_end:
+                        current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end)
+                        user.subscription_end_date = current_period_end
+                        logging.info(f"Updated subscription end date to {current_period_end} after payment")
                 except Exception as e:
-                    logging.error(f"Error refilling monthly credits: {str(e)}")
+                    logging.error(f"Error updating subscription end date: {str(e)}")
+                
+                # Note: Monthly credits are handled by the anniversary-based system
+                # No immediate refill on subscription renewal - credits are managed on anniversary dates
+                logging.info(f"✅ Subscription renewed for user {user.id}. Credits managed on anniversary schedule.")
                 
                 db.session.commit()
                 logging.info(f"Invoice paid and credits refilled for user {user.id}, amount: ${amount_paid/100:.2f}")

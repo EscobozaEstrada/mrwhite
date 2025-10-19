@@ -18,9 +18,12 @@ import { GrUpdate } from "react-icons/gr";
 import { MdOutlineInsights, MdOutlineUpdate } from "react-icons/md";
 import { GiHeartWings } from "react-icons/gi";
 import { VscDebugBreakpointLog } from "react-icons/vsc";
+import { useAuth } from "@/context/AuthContext";
 
 const HubPage = () => {
     const router = useRouter();
+    const { user, setUser } = useAuth();
+    
     return (
         <div className="flex flex-col gap-y-24 overflow-x-hidden">
 
@@ -137,7 +140,7 @@ const HubPage = () => {
                                 <p className="font-light text-justify font-public-sans text-[16px]">
                                     The Legacy of Love Dog Hub is powerful on its own, but even more meaningful when paired with The Way of the Dog: A Guide to Intuitive Bonding and Creating an Interspecies Culture with Your Dog, the book by Anahata Graceland herself, also the founder and bestie of Mr. White. Anahata and Mr White help guide you in creating experiences from a foundational philosophy for deepening your bond with your dog. Get ready for your next best hobby!
                                 </p>
-                                <Button variant="ghost" onClick={() => router.push('/way-of-the-dog')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0 mb-6">
+                                <Button variant="ghost" onClick={() => router.push('/the-way')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0 mb-6">
                                     Discover The Way of the Dog
                                     <TbArrowRight className="w-4 h-4" />
                                 </Button>
@@ -230,7 +233,7 @@ const HubPage = () => {
                                 alt="hub-eat"
                                 fill
                                 className="object-cover"
-                                containerClassName="w-1/2 max-[600px]:h-[400px] max-[1000px]:mx-auto max-[1000px]:h-[800px] max-[1000px]:object-contain"
+                                containerClassName="w-1/2 max-[1000px]:w-[500px] max-[600px]:w-[400px] max-[600px]:h-[800px] max-[430px]:w-full max-[600px]:h-[400px] max-[1000px]:mx-auto max-[1000px]:h-[800px] max-[1000px]:object-contain"
                                 style={{ aspectRatio: '' }}
                                 overlay={true}
                             />
@@ -360,10 +363,10 @@ const HubPage = () => {
 
                     <ImagePop
                         src="/assets/hub-single.webp"
-                        alt="hub-eat"
+                        alt="hub-single"
                         fill
                         className="object-cover"
-                        containerClassName="w-1/2 max-[850px]:h-[400px] max-[600px]:h-[400px] max-[1000px]:mx-auto max-[1000px]:object-contain"
+                        containerClassName="w-1/2 max-[450px]:w-full max-[650px]:w-[400px] max-[650px]:h-[600px] max-[850px]:h-[400px] max-[600px]:h-[400px] max-[1000px]:mx-auto max-[1000px]:object-contain"
                         style={{ aspectRatio: '' }}
                         overlay={true}
                     />
@@ -400,7 +403,7 @@ const HubPage = () => {
                                     journal and total Mr White masterful assistant, paired with The Way of the
                                     Dog, becomes a daily invitation to grow heartfully, side by side
                                 </p>
-                                <Button variant="ghost" onClick={() => router.push('/way-of-the-dog')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0">
+                                <Button variant="ghost" onClick={() => router.push('/the-way')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0">
                                     Learn more about The Way of the Dog
                                     <TbArrowRight className="w-4 h-4" />
                                 </Button>
@@ -413,7 +416,7 @@ const HubPage = () => {
                                 </p>
                                 <p className="font-light text-justify font-public-sans text-[16px]">Planning ahead with compassion, this hub supports you in preparing for your dog’s final journey. It helps organize wishes, memorial ideas, and Page 4 of 12 practical steps with care and sensitivity, offering peace of mind and honoring the love you share.</p>
                                 <p>And The Way of the Dog offers soulful guidance for walking this sacred path. With reflections, journaling prompts, and end-of-life wisdom and plans woven throughout the book, it gently helps you hold grief, memory, and love with grace. Together, this hub and The Way of the Dog create a tender and courageous way to celebrate the life you've shared—and the bond that never ends.</p>
-                                <Button variant="ghost" onClick={() => router.push('/way-of-the-dog')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0">
+                                <Button variant="ghost" onClick={() => router.push('/the-way')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0">
                                     Explore The Way of the Dog
                                     <TbArrowRight className="w-4 h-4" />
                                 </Button>
@@ -437,7 +440,7 @@ const HubPage = () => {
                             </p>
                             <p className="font-light text-justify font-public-sans text-[16px]">Planning ahead with compassion, this hub supports you in preparing for your dog’s final journey. It helps organize wishes, memorial ideas, and Page 4 of 12 practical steps with care and sensitivity, offering peace of mind and honoring the love you share.</p>
                             <p>And The Way of the Dog offers soulful guidance for walking this sacred path. With reflections, journaling prompts, and end-of-life wisdom and plans woven throughout the book, it gently helps you hold grief, memory, and love with grace. Together, this hub and The Way of the Dog create a tender and courageous way to celebrate the life you've shared—and the bond that never ends.</p>
-                            <Button variant="ghost" onClick={() => router.push('/way-of-the-dog')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0">
+                            <Button variant="ghost" onClick={() => router.push('/the-way')} className="text-public-sans text-light font-extralight text-[16px] italic self-start !text-[var(--mrwhite-primary-color)] !p-0">
                                 Explore The Way of the Dog
                                 <TbArrowRight className="w-4 h-4" />
                             </Button>
@@ -523,7 +526,7 @@ const HubPage = () => {
                         alt="hub-love"
                         fill
                         className="object-cover"
-                        containerClassName="w-1/2 max-[600px]:h-[400px] max-[1000px]:mx-auto max-[1000px]:h-[800px] max-[1000px]:object-contain"
+                        containerClassName="w-1/2  max-[600px]:h-[400px] max-[1000px]:mx-auto max-[1000px]:h-[800px] max-[1000px]:object-contain"
                         style={{ aspectRatio: '' }}
                         overlay={true}
                     />
@@ -597,11 +600,12 @@ const HubPage = () => {
                                 </h1>
                             </FadeInSection>
 
-                            <p className="font-light text-justify font-public-sans text-[16px]">Ready to elevate the way you care for your companion? Unlock the full power of the (Your Dog’s Name) Legacy of Love Living Hub by joining the Elite Pack today. </p>
+                            <p className="font-light text-justify font-public-sans text-[16px]">Ready to elevate the way you care for your companion? Urenlock the full power of the (Your Dog’s Name) Legacy of Love Living Hub by joining the Elite Pack today. </p>
 
                             <p className="font-light text-justify font-public-sans text-[16px]">With your Elite Pack membership, you’ll gain 24/7 access to your personal portal, exclusive AI-powered tools, and all the features that make caring for your dog easier, richer, and more connected.</p>
+                            
                             <p className="font-bold text-[16px]">
-                                Unlock Your Legacy Today! <Link href="/signup" className="text-public-sans italic inline-block text-light text-[16px] !text-[var(--mrwhite-primary-color)]">Sign Up Now</Link></p>
+                                Unlock Your Legacy Today! {!user && <Link href="/signup" className="text-public-sans italic inline-block text-light text-[16px] !text-[var(--mrwhite-primary-color)]">Sign Up Now</Link>}</p>
 
                             <p className="font-light text-justify font-public-sans text-[16px]">Not quite ready to commit? Explore a live preview or demo of the Living Hub to see how it works and how it can transform your daily care routine. </p>
 
@@ -609,8 +613,6 @@ const HubPage = () => {
 
                         </div>
                     </div>
-
-
 
                 </div>
 

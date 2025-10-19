@@ -4,7 +4,7 @@ Enhanced Reminder Routes - API endpoints for the enhanced reminder system with A
 """
 
 from flask import Blueprint, request, jsonify, current_app, g, redirect
-from datetime import datetime, date, time, timezone
+from datetime import datetime, date, time, timezone, timedelta
 import logging
 from app.models.health_models import HealthReminder, ReminderType, ReminderStatus, RecurrenceType, ReminderNotification
 from app.models.user import User
@@ -15,6 +15,7 @@ from app import db
 import pytz
 from app.services.followup_notification_service import get_followup_notification_service
 from app.services.health_service import HealthService
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -60,23 +61,34 @@ def get_reminders():
         # Get AI time manager for countdown calculations
         ai_time_manager = get_ai_time_manager()
         
+        # Get user timezone for proper display conversion
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        
         # Format reminders with timezone-aware countdown
         formatted_reminders = []
         for reminder in reminders:
-            # Combine due_date and due_time for proper datetime handling
-            due_datetime = None
+            # Combine due_date and due_time (stored as naive UTC in database)
+            due_datetime_naive = None
             if reminder.due_date:
                 if reminder.due_time:
-                    due_datetime = datetime.combine(reminder.due_date, reminder.due_time)
+                    due_datetime_naive = datetime.combine(reminder.due_date, reminder.due_time)
                 else:
-                    due_datetime = datetime.combine(reminder.due_date, time(9, 0))  # Default to 9 AM
+                    due_datetime_naive = datetime.combine(reminder.due_date, time(9, 0))  # Default to 9 AM
+            
+            # Convert to timezone-aware UTC, then to user's local timezone for display
+            due_datetime_utc = None
+            due_datetime_local = None
+            if due_datetime_naive:
+                due_datetime_utc = pytz.utc.localize(due_datetime_naive)
+                due_datetime_local = due_datetime_utc.astimezone(user_tz)
             
             reminder_dict = {
                 'id': reminder.id,
                 'title': reminder.title,
                 'description': reminder.description,
                 'reminder_type': reminder.reminder_type.value if reminder.reminder_type else None,
-                'due_date': due_datetime.isoformat() if due_datetime else None,
+                # Send local timezone datetime for display
+                'due_date': due_datetime_local.isoformat() if due_datetime_local else None,
                 'status': reminder.status.value if reminder.status else None,
                 'recurrence_type': reminder.recurrence_type.value if reminder.recurrence_type else None,
                 'recurrence_interval': reminder.recurrence_interval,
@@ -85,13 +97,14 @@ def get_reminders():
                 'advance_notice_days': reminder.days_before_reminder,
                 'send_push': reminder.send_push,
                 'send_email': reminder.send_email,
-                'is_active': reminder.status == ReminderStatus.PENDING
+                'is_active': reminder.status == ReminderStatus.PENDING,
+                'priority': reminder.priority  # Add priority to the response
             }
             
             # Add real-time countdown information
-            if due_datetime:
+            if due_datetime_utc:
                 countdown_info = ai_time_manager.calculate_time_until_due(
-                    due_datetime=due_datetime,
+                    due_datetime=due_datetime_utc,
                     user_timezone=user.timezone
                 )
                 reminder_dict['countdown'] = countdown_info
@@ -144,15 +157,50 @@ def create_reminder():
         
         # Parse and validate due date
         due_date_str = data.get('due_date')
+        timezone_metadata = {}
+        
         if due_date_str:
             try:
-                # If user provides time, use it; otherwise use AI suggestion
+                # 🎯 TIMEZONE FIX: Proper handling of user timezone information
+                user_tz = user.get_timezone()
+                
                 if 'T' in due_date_str or ' ' in due_date_str:
-                    # User provided specific time
-                    due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
-                    if due_date.tzinfo is None:
-                        # Assume user's local time
-                        due_date = user.convert_to_utc(due_date)
+                    # User provided specific time - this is already in user's local timezone
+                    due_date_local = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+                    
+                    if due_date_local.tzinfo is None:
+                        # This is a naive datetime in user's local timezone
+                        logger.info(f"📅 Processing naive datetime as user local time: {due_date_local} in {user.timezone}")
+                        
+                        # Create timezone metadata for proper scheduling
+                        timezone_metadata = {
+                            'user_timezone': user.timezone,
+                            'timezone_aware_creation': True,
+                            'creation_timestamp': datetime.utcnow().isoformat(),
+                            'original_local_time': due_date_local.isoformat(),
+                            'creation_source': 'frontend_api'
+                        }
+                        
+                        # Store date and time separately as local values
+                        due_date = due_date_local.date()
+                        due_time = due_date_local.time()
+                        
+                        logger.info(f"📅 Stored local date/time: {due_date} {due_time} (timezone: {user.timezone})")
+                    else:
+                        # This is already timezone-aware
+                        user_local_datetime = due_date_local.astimezone(user_tz)
+                        due_date = user_local_datetime.date()
+                        due_time = user_local_datetime.time()
+                        
+                        timezone_metadata = {
+                            'user_timezone': user.timezone,
+                            'timezone_aware_creation': True,
+                            'creation_timestamp': datetime.utcnow().isoformat(),
+                            'original_local_time': user_local_datetime.isoformat(),
+                            'creation_source': 'frontend_api_tz_aware'
+                        }
+                        
+                        logger.info(f"📅 Converted timezone-aware datetime to local: {due_date} {due_time} (timezone: {user.timezone})")
                 else:
                     # User provided only date, use AI to suggest optimal time
                     due_date_only = datetime.fromisoformat(due_date_str).date()
@@ -165,9 +213,18 @@ def create_reminder():
                         user_preferences=user.preferred_reminder_times
                     )
                     
-                    # Combine date with AI-suggested time
-                    due_datetime = datetime.combine(due_date_only, time_insight.optimal_time)
-                    due_date = user.convert_to_utc(due_datetime)
+                    # Use AI-suggested time as local time
+                    due_date = due_date_only
+                    due_time = time_insight.optimal_time
+                    
+                    timezone_metadata = {
+                        'user_timezone': user.timezone,
+                        'timezone_aware_creation': True,
+                        'creation_timestamp': datetime.utcnow().isoformat(),
+                        'ai_suggested_time': True,
+                        'original_local_time': datetime.combine(due_date, due_time).isoformat(),
+                        'creation_source': 'frontend_api_ai_time'
+                    }
                     
                     # Learn from this AI suggestion for future improvements
                     ai_time_manager.learn_user_patterns(
@@ -176,6 +233,8 @@ def create_reminder():
                         chosen_time=time_insight.optimal_time,
                         user_timezone=user.timezone
                     )
+                    
+                    logger.info(f"📅 AI-suggested local time: {due_date} {due_time} (timezone: {user.timezone})")
                 
             except ValueError:
                 return jsonify({
@@ -184,24 +243,64 @@ def create_reminder():
                 }), 400
         else:
             due_date = None
+            due_time = None
         
-        # Create reminder
+        # 🎯 CRITICAL FIX: Calculate reminder_date and reminder_time for notifications
+        reminder_date = None
+        reminder_time = None
+        if due_date:
+            advance_notice_days = data.get('advance_notice_days', 1)
+            calculated_reminder_date = due_date - timedelta(days=advance_notice_days)
+            
+            # 🎯 FIX: If calculated reminder date is in the past, set to today
+            today = date.today()
+            if calculated_reminder_date < today:
+                logger.warning(f"⚠️  Calculated reminder date {calculated_reminder_date} is in the past, setting to today ({today})")
+                reminder_date = today
+            else:
+                reminder_date = calculated_reminder_date
+            
+            # Use the same time as due_time, or default to 9 AM
+            reminder_time = due_time or time(9, 0)
+        
+        # Create reminder with proper timezone metadata
         reminder = HealthReminder(
             user_id=user_id,
             title=title,
             description=data.get('description', ''),
             reminder_type=ReminderType(data.get('reminder_type', 'custom')),
             due_date=due_date,
+            due_time=due_time,
+            reminder_date=reminder_date,  # 🎯 CRITICAL: Set when to send notification
+            reminder_time=reminder_time,  # 🎯 CRITICAL: Set time to send notification
             status=ReminderStatus(data.get('status', 'pending')),
-            recurrence_type=RecurrenceType(data.get('recurrence_type', 'none')) if data.get('recurrence_type') else None,
+            recurrence_type=RecurrenceType(data.get('recurrence_type')) if data.get('recurrence_type') and data.get('recurrence_type') != 'none' else RecurrenceType.NONE,
             recurrence_interval=data.get('recurrence_interval', 1),
             days_before_reminder=data.get('advance_notice_days', 1),
             send_push=data.get('send_push', True),
-            send_email=data.get('send_email', False),
+            send_email=data.get('send_email', True),
+            priority=data.get('priority', 'medium'),  # Add priority field
+            extra_data=json.dumps(timezone_metadata) if timezone_metadata else None
         )
         
         db.session.add(reminder)
         db.session.commit()
+        
+        # 🎯 CRITICAL FIX: Schedule the new reminder for notification
+        try:
+            from app.services.precision_reminder_scheduler import get_precision_scheduler
+            scheduler = get_precision_scheduler()
+            if scheduler and scheduler.is_running:
+                success = scheduler.schedule_reminder(reminder)
+                if success:
+                    logger.info(f"✅ Scheduled new reminder {reminder.id} for notification")
+                else:
+                    logger.warning(f"⚠️  Failed to schedule new reminder {reminder.id}")
+            else:
+                logger.warning(f"⚠️  Precision scheduler not available - reminder {reminder.id} not scheduled")
+        except Exception as e:
+            logger.error(f"❌ Error scheduling new reminder {reminder.id}: {str(e)}")
+            # Don't fail the request if scheduling fails
         
         # Get countdown information
         countdown_info = None
@@ -288,7 +387,8 @@ def get_reminder(reminder_id):
             'advance_notice_days': reminder.days_before_reminder,
             'send_push': reminder.send_push,
             'send_email': reminder.send_email,
-            'is_active': reminder.status == ReminderStatus.PENDING
+            'is_active': reminder.status == ReminderStatus.PENDING,
+            'priority': reminder.priority  # Add priority to the response
         }
         
         # Add real-time countdown information
@@ -388,6 +488,21 @@ def update_reminder(reminder_id):
                     
                     reminder.due_date = due_date
                     
+                    # 🎯 CRITICAL FIX: Update reminder_date and reminder_time when due_date changes
+                    if reminder.due_date:
+                        advance_notice_days = data.get('advance_notice_days', reminder.days_before_reminder)
+                        calculated_reminder_date = reminder.due_date.date() - timedelta(days=advance_notice_days)
+                        
+                        # 🎯 FIX: If calculated reminder date is in the past, set to today
+                        today = date.today()
+                        if calculated_reminder_date < today:
+                            logger.warning(f"⚠️  Calculated reminder date {calculated_reminder_date} is in the past, setting to today ({today})")
+                            reminder.reminder_date = today
+                        else:
+                            reminder.reminder_date = calculated_reminder_date
+                        
+                        reminder.reminder_time = reminder.due_date.time() or time(9, 0)
+                    
                 except ValueError:
                     return jsonify({
                         'success': False,
@@ -395,18 +510,31 @@ def update_reminder(reminder_id):
                     }), 400
             else:
                 reminder.due_date = None
+                reminder.reminder_date = None
+                reminder.reminder_time = None
         
         if 'status' in data:
             reminder.status = ReminderStatus(data['status'])
         
         if 'recurrence_type' in data:
-            reminder.recurrence_type = RecurrenceType(data['recurrence_type']) if data['recurrence_type'] else None
+            reminder.recurrence_type = RecurrenceType(data['recurrence_type']) if data['recurrence_type'] and data['recurrence_type'] != 'none' else RecurrenceType.NONE
         
         if 'recurrence_interval' in data:
             reminder.recurrence_interval = data['recurrence_interval']
         
         if 'advance_notice_days' in data:
             reminder.days_before_reminder = data['advance_notice_days']
+            # 🎯 CRITICAL FIX: Recalculate reminder_date when advance notice changes
+            if reminder.due_date:
+                calculated_reminder_date = reminder.due_date.date() - timedelta(days=reminder.days_before_reminder)
+                
+                # 🎯 FIX: If calculated reminder date is in the past, set to today
+                today = date.today()
+                if calculated_reminder_date < today:
+                    logger.warning(f"⚠️  Calculated reminder date {calculated_reminder_date} is in the past, setting to today ({today})")
+                    reminder.reminder_date = today
+                else:
+                    reminder.reminder_date = calculated_reminder_date
         
         if 'send_push' in data:
             reminder.send_push = data['send_push']
@@ -414,9 +542,28 @@ def update_reminder(reminder_id):
         if 'send_email' in data:
             reminder.send_email = data['send_email']
         
+        if 'priority' in data:
+            reminder.priority = data['priority']
+        
         reminder.updated_at = datetime.now(timezone.utc)
         
         db.session.commit()
+        
+        # 🎯 CRITICAL FIX: Reschedule the updated reminder for notification
+        try:
+            from app.services.precision_reminder_scheduler import get_precision_scheduler
+            scheduler = get_precision_scheduler()
+            if scheduler and scheduler.is_running:
+                success = scheduler.reschedule_reminder(reminder)
+                if success:
+                    logger.info(f"✅ Rescheduled updated reminder {reminder.id} for notification")
+                else:
+                    logger.warning(f"⚠️  Failed to reschedule updated reminder {reminder.id}")
+            else:
+                logger.warning(f"⚠️  Precision scheduler not available - reminder {reminder.id} not rescheduled")
+        except Exception as e:
+            logger.error(f"❌ Error rescheduling updated reminder {reminder.id}: {str(e)}")
+            # Don't fail the request if scheduling fails
         
         # Get countdown information
         countdown_info = None
@@ -585,6 +732,161 @@ def test_endpoint():
         'timestamp': datetime.now().isoformat()
     })
 
+@enhanced_reminder_bp.route('/internal', methods=['POST'])
+def create_reminder_internal():
+    """Create a new reminder for internal FastAPI chat service (no auth required)"""
+    try:
+        data = request.get_json()
+        
+        # Debug: Log what Flask receives
+        logger.info(f"🔍 Flask received data: {data}")
+        
+        # Extract user_id from request body for internal calls
+        user_id = data.get('user_id')
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'user_id is required for internal calls'
+            }), 400
+        
+        # Get user for timezone conversion
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        # Set g.user_id for the reminder creation process
+        g.user_id = user_id
+        
+        # Use the same logic as the main create_reminder endpoint
+        title = data.get('title', 'Pet Care Reminder')
+        description = data.get('description', '')
+        
+        # Map reminder type - handle both enum and string values
+        reminder_type_str = data.get('reminder_type', 'custom')
+        if reminder_type_str == 'grooming':
+            reminder_type = ReminderType.GROOMING
+        elif reminder_type_str == 'vaccination':
+            reminder_type = ReminderType.VACCINATION
+        elif reminder_type_str == 'medication':
+            reminder_type = ReminderType.MEDICATION
+        elif reminder_type_str == 'checkup':
+            reminder_type = ReminderType.CHECKUP
+        else:
+            reminder_type = ReminderType.CUSTOM
+            
+        due_date_str = data.get('due_date')
+        
+        logger.info(f"🔔 Internal reminder creation for user {user_id}: {title}")
+        logger.info(f"📅 Raw due_date_str: {due_date_str}")
+        logger.info(f"👤 User timezone: {user.timezone}")
+        
+        # Parse due date with proper timezone handling
+        due_date = None
+        due_time = None
+        
+        if due_date_str:
+            try:
+                # Parse the datetime from FastAPI (should be in user's local time intent)
+                parsed_datetime = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+                
+                # If it's a naive datetime, treat it as user local time
+                if parsed_datetime.tzinfo is None:
+                    logger.info(f"📅 Treating naive datetime as user local time: {parsed_datetime}")
+                    # This is user's local time - store as date/time components
+                    due_date = parsed_datetime.date()
+                    due_time = parsed_datetime.time()
+                    logger.info(f"📅 Stored as date: {due_date}, time: {due_time}")
+                else:
+                    # Convert to user's timezone first to get the intended local time
+                    import pytz
+                    user_tz = pytz.timezone(user.timezone)
+                    local_datetime = parsed_datetime.astimezone(user_tz)
+                    due_date = local_datetime.date()
+                    due_time = local_datetime.time()
+                    logger.info(f"📅 Converted to user timezone - date: {due_date}, time: {due_time}")
+                    
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Could not parse due date: {due_date_str}, error: {e}")
+                # Fallback: try to parse as just date
+                try:
+                    due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    logger.error(f"Failed to parse due_date_str: {due_date_str}")
+        
+        # Debug: Log priority being used
+        priority_value = data.get('priority', 'medium')
+        logger.info(f"🎯 Using priority for internal reminder creation: {priority_value}")
+        
+        # Create the reminder with proper timezone handling
+        reminder = HealthReminder(
+            user_id=user_id,
+            title=title,
+            description=description,
+            reminder_type=reminder_type,
+            due_date=due_date,
+            due_time=due_time,
+            status=ReminderStatus.PENDING,
+            send_email=data.get('send_email', True),
+            priority=priority_value,  # ADD MISSING PRIORITY FIELD!
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        db.session.add(reminder)
+        db.session.commit()
+        
+        # 🎯 CRITICAL FIX: Schedule the new reminder for email notification
+        try:
+            from app.services.precision_reminder_scheduler import get_precision_scheduler
+            scheduler = get_precision_scheduler()
+            if scheduler and scheduler.is_running:
+                success = scheduler.schedule_reminder(reminder)
+                if success:
+                    logger.info(f"✅ Scheduled new internal reminder {reminder.id} for email notification")
+                else:
+                    logger.warning(f"⚠️  Failed to schedule new internal reminder {reminder.id}")
+            else:
+                logger.warning(f"⚠️  Precision scheduler not available - internal reminder {reminder.id} not scheduled")
+        except Exception as e:
+            logger.error(f"❌ Error scheduling new internal reminder {reminder.id}: {str(e)}")
+            # Don't fail the request if scheduling fails
+        
+        # Calculate display datetime for response
+        display_datetime = None
+        if due_date and due_time:
+            display_datetime = datetime.combine(due_date, due_time)
+        elif due_date:
+            display_datetime = datetime.combine(due_date, datetime.min.time())
+        
+        logger.info(f"✅ Created internal reminder {reminder.id} for user {user_id}")
+        logger.info(f"📅 Final reminder - date: {reminder.due_date}, time: {reminder.due_time}")
+        
+        return jsonify({
+            'success': True,
+            'reminder': {
+                'id': reminder.id,
+                'title': reminder.title,
+                'description': reminder.description,
+                'due_date': display_datetime.isoformat() if display_datetime else None,
+                'reminder_type': reminder.reminder_type.value,
+                'status': reminder.status.value,
+                'priority': reminder.priority,  # ADD PRIORITY TO RESPONSE
+                'user_timezone': user.timezone
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error creating internal reminder: {str(e)}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @enhanced_reminder_bp.route('/complete/<int:reminder_id>', methods=['POST'])
 @require_auth
 def mark_reminder_completed(reminder_id):
@@ -679,16 +981,16 @@ def complete_reminder_via_email(reminder_id):
         
         if result['success']:
             # Redirect to success page with reminder info
-            frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3000')
+            frontend_url = current_app.config.get('FRONTEND_URL')
             return redirect(f"{frontend_url}/reminder/completed?id={reminder_id}&method=email")
         else:
             # Redirect to error page
-            frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3000')
+            frontend_url = current_app.config.get('FRONTEND_URL')
             return redirect(f"{frontend_url}/reminder/error?message={result['error']}")
             
     except Exception as e:
         current_app.logger.error(f"Error completing reminder via email: {str(e)}")
-        frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:3000')
+        frontend_url = current_app.config.get('FRONTEND_URL')
         return redirect(f"{frontend_url}/reminder/error?message=Server error")
 
 @enhanced_reminder_bp.route('/complete/<int:reminder_id>/token', methods=['POST'])

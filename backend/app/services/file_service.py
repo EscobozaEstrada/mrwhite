@@ -32,6 +32,49 @@ class FileService:
             Dictionary with success status, message, and URL
         """
         try:
+            # Debug log
+            current_app.logger.info(f"Starting process_image_file for {file.filename}")
+            
+            # Try to use the ImageService if available
+            try:
+                from app.services.image_service import ImageService
+                current_app.logger.info("ImageService imported successfully")
+                image_service = ImageService()
+                current_app.logger.info("ImageService instance created")
+                
+                # Get user_id from Flask g object if available
+                from flask import g
+                user_id = getattr(g, 'user_id', None)
+                current_app.logger.info(f"Retrieved user_id from Flask g: {user_id}")
+                
+                if user_id:
+                    # Use the comprehensive image service
+                    current_app.logger.info(f"Calling ImageService.process_image_upload for user_id: {user_id}")
+                    success, message, image_data = image_service.process_image_upload(
+                        file=file,
+                        user_id=user_id
+                    )
+                    current_app.logger.info(f"ImageService.process_image_upload result: success={success}, message={message}")
+                    
+                    if success and image_data:
+                        current_app.logger.info(f"ImageService processed image successfully: {image_data.get('url')}")
+                        return {
+                            'success': True,
+                            'message': message,
+                            'url': image_data.get('url'),
+                            'description': image_data.get('description'),
+                            'type': 'image'
+                        }
+                else:
+                    current_app.logger.error(f"Cannot use ImageService: No user_id in Flask g object")
+            except Exception as img_error:
+                current_app.logger.error(f"Could not use ImageService, falling back to basic image handling: {str(img_error)}")
+                import traceback
+                current_app.logger.error(f"ImageService error traceback: {traceback.format_exc()}")
+            
+            # Fallback to basic image handling
+            current_app.logger.info(f"Using fallback image handling for {file.filename}")
+            
             # Create uploads directory if it doesn't exist
             uploads_dir = os.path.join(os.getcwd(), 'uploads')
             if not os.path.exists(uploads_dir):
@@ -40,33 +83,48 @@ class FileService:
             # Save file locally
             file_path = os.path.join(uploads_dir, file.filename)
             file.save(file_path)
+            current_app.logger.info(f"Saved file locally to {file_path}")
             
             # Optionally upload to S3
             try:
+                current_app.logger.info(f"Attempting S3 upload for {file_path}")
                 s3_success, s3_url = FileService.upload_to_s3(file_path, file.filename, file.content_type)
                 if s3_success:
                     # Remove local file after successful S3 upload
                     os.remove(file_path)
+                    current_app.logger.info(f"S3 upload successful, URL: {s3_url}")
                     return {
                         'success': True,
                         'message': f'Image {file.filename} uploaded successfully to S3',
-                        'url': s3_url
+                        'url': s3_url,
+                        'type': 'image',
+                        'file_type': 'image/' + file_path.split('.')[-1].lower()
                     }
+                else:
+                    current_app.logger.warning(f"S3 upload failed, s3_url: {s3_url}")
             except Exception as s3_error:
                 current_app.logger.warning(f"S3 upload failed, keeping local file: {str(s3_error)}")
+                import traceback
+                current_app.logger.warning(f"S3 upload error traceback: {traceback.format_exc()}")
             
+            current_app.logger.info(f"Using local file URL: /uploads/{file.filename}")
             return {
                 'success': True,
                 'message': f'Image {file.filename} saved locally',
-                'url': f'/uploads/{file.filename}'
+                'url': f'/uploads/{file.filename}',
+                'type': 'image',
+                'file_type': 'image/' + file.filename.split('.')[-1].lower()
             }
             
         except Exception as e:
             current_app.logger.error(f"Error processing image file: {str(e)}")
+            import traceback
+            current_app.logger.error(f"Image processing error traceback: {traceback.format_exc()}")
             return {
                 'success': False,
                 'message': f'Error processing image: {str(e)}',
-                'url': None
+                'url': None,
+                'type': 'image'
             }
     
     @staticmethod
@@ -78,9 +136,8 @@ class FileService:
             Tuple of (success: bool, s3_url: Optional[str])
         """
         try:
-            success = upload_file_to_s3(file_path, object_name, content_type)
+            success, message, s3_url = upload_file_to_s3(file_path, object_name, content_type)
             if success:
-                s3_url = get_s3_url(object_name)
                 return True, s3_url
             else:
                 return False, None

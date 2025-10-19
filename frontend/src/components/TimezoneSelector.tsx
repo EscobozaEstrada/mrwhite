@@ -24,7 +24,7 @@ import {
     Brain
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { toast } from 'react-toastify';
+import toast from 'react-hot-toast';
 
 interface TimezoneInfo {
     source: 'browser' | 'ip' | 'search';
@@ -314,7 +314,7 @@ const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
 
     return (
         <motion.div
-            className={`space-y-6 ${className}`}
+            className={`space-y-6 ${className} overflow-y-auto custom-scrollbar max-h-[60vh] pr-2`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
@@ -384,14 +384,15 @@ const TimezoneSelector: React.FC<TimezoneSelectorProps> = ({
 
                     {/* Search */}
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Or search for your city:</label>
+                        <label htmlFor="search-input" className="text-sm font-medium mb-4">Or search for your city:</label>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <Input
+                            <input
                                 placeholder="Enter city or country (e.g., New York, London, Tokyo)"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
+                                id="search-input"
+                                className="w-full mt-2 bg-[#000000] border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-white placeholder-gray-400 focus:outline-none focus:border-[var(--mrwhite-primary-color)] focus:ring-1 focus:ring-[var(--mrwhite-primary-color)]"
                             />
                             {loading && (
                                 <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />

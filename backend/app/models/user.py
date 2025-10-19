@@ -30,10 +30,11 @@ class User(db.Model):
     credits_used_today = db.Column(db.Integer, default=0)  # Credits used today
     credits_used_this_month = db.Column(db.Integer, default=0)  # Credits used this month
     last_credit_reset_date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())  # For daily/monthly resets
+    last_monthly_refill_date = db.Column(db.Date, nullable=True)  # Track last monthly credit refill date
     
     # Usage Analytics
     lifetime_usage_stats = db.Column(db.JSON, default=dict)  # Store usage analytics
-    subscription_tier = db.Column(db.String(50), default='free')  # free, basic, premium, enterprise
+    subscription_tier = db.Column(db.String(50), default='free')
     
     # Free Credits & Bonuses
     daily_free_credits_claimed = db.Column(db.Boolean, default=False)  # Daily free credits
@@ -52,6 +53,9 @@ class User(db.Model):
     auto_detect_timezone = db.Column(db.Boolean, default=True)  # Auto-detect timezone
     preferred_reminder_times = db.Column(db.JSON, default=dict)  # AI-learned preferences
     time_format_24h = db.Column(db.Boolean, default=False)  # 24-hour vs 12-hour format
+    
+    # Dog Image
+    dog_image = db.Column(db.String(255), nullable=True)  # S3 URL of uploaded dog image
     
     # Relationship with conversations
     conversations = db.relationship('Conversation', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -108,5 +112,6 @@ class User(db.Model):
             'location_city': self.location_city,
             'location_country': self.location_country,
             'time_format_24h': self.time_format_24h,
-            'preferred_reminder_times': self.preferred_reminder_times or {}
+            'preferred_reminder_times': self.preferred_reminder_times or {},
+            'dog_image': self.dog_image
         }

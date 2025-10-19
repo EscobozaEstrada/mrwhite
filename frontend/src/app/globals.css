@@ -120,6 +120,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -151,7 +152,8 @@ input:-webkit-autofill {
 }
 
 .active-link {
-  position: relative; /* Ensure the pseudo-element is positioned relative to the link */
+  position: relative;
+  /* Ensure the pseudo-element is positioned relative to the link */
 }
 
 .active-link::before {
@@ -180,10 +182,12 @@ input:-webkit-autofill {
     opacity: 0.5;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.7;
     transform: scale(1.1);
   }
+
   100% {
     opacity: 0.5;
     transform: scale(1);
@@ -196,14 +200,12 @@ input:-webkit-autofill {
   height: 100vh;
   max-width: 100%;
   max-height: 100%;
-  background: radial-gradient(
-    circle at center,
-    rgba(211, 184, 106, 0.2) 0%,
-    rgba(211, 184, 106, 0.15) 25%,
-    rgba(211, 184, 106, 0.1) 50%,
-    rgba(211, 184, 106, 0.05) 75%,
-    rgba(211, 184, 106, 0) 100%
-  );
+  background: radial-gradient(circle at center,
+      rgba(211, 184, 106, 0.2) 0%,
+      rgba(211, 184, 106, 0.15) 25%,
+      rgba(211, 184, 106, 0.1) 50%,
+      rgba(211, 184, 106, 0.05) 75%,
+      rgba(211, 184, 106, 0) 100%);
   pointer-events: none;
   animation: glow 4s ease-in-out infinite;
   z-index: 0;
@@ -304,3 +306,660 @@ input:-webkit-autofill {
 .markdown-content a:hover {
   text-decoration: underline;
 }
+
+/* Book Content Styles */
+.prose {
+  max-width: none;
+}
+
+.book-heading-1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 2rem 0 1.5rem 0;
+  color: #1f2937;
+  border-bottom: 3px solid #3b82f6;
+  padding-bottom: 0.5rem;
+}
+
+.book-heading-2 {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.5rem 0 1rem 0;
+  color: #374151;
+}
+
+.book-heading-3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 1.25rem 0 0.75rem 0;
+  color: #4b5563;
+}
+
+.book-heading-4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 1rem 0 0.5rem 0;
+  color: #6b7280;
+}
+
+.book-heading-5,
+.book-heading-6 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.75rem 0 0.5rem 0;
+  color: #6b7280;
+}
+
+.book-paragraph {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  margin: 1rem 0;
+  color: #374151;
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+.book-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 1rem;
+}
+
+.book-table td {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.book-table tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+/* Highlight Styles */
+[class*="highlight-"] {
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: 0 1px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+[class*="highlight-"]:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+[class*="highlight-"]:hover::after {
+  content: "Click to remove highlight";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+/* Selection styles for creating highlights */
+::selection {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+::-moz-selection {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* Reading focus styles */
+.reading-mode {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.reading-mode .book-paragraph {
+  line-height: 2;
+  letter-spacing: 0.01em;
+}
+
+/* Smooth scrolling for chapter navigation */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for reading content */
+.prose::-webkit-scrollbar {
+  width: 8px;
+}
+
+.prose::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.prose::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.prose::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print styles for book content */
+@media print {
+  .book-paragraph {
+    font-size: 12pt;
+    line-height: 1.6;
+    margin: 8pt 0;
+  }
+
+  .book-heading-1 {
+    font-size: 18pt;
+    margin: 16pt 0 12pt 0;
+  }
+
+  .book-heading-2 {
+    font-size: 16pt;
+    margin: 14pt 0 10pt 0;
+  }
+
+  [class*="highlight-"] {
+    background-color: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+  }
+}
+
+/* React PDF Styles */
+.react-pdf__Page {
+  position: relative !important;
+}
+
+.react-pdf__Page__textContent {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  line-height: 1 !important;
+}
+
+.react-pdf__Page__textContent span {
+  color: transparent !important;
+  position: absolute !important;
+  white-space: pre !important;
+  cursor: text !important;
+  transform-origin: 0% 0% !important;
+}
+
+/* Enhanced text selection */
+.react-pdf__Page__textContent span:hover {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.react-pdf__Page__textContent span::selection {
+  background-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Highlight animations */
+.highlight-animation {
+  animation: highlightFade 0.3s ease-in-out;
+}
+
+@keyframes highlightFade {
+  0% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+
+  50% {
+    background-color: rgba(255, 217, 61, 0.8);
+    transform: scale(1.02);
+  }
+
+  100% {
+    background-color: rgba(255, 217, 61, 0.4);
+    transform: scale(1);
+  }
+}
+
+/* Custom scrollbar for notes panel */
+.notes-panel-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notes-panel-scroll::-webkit-scrollbar-track {
+  background: rgba(55, 65, 81, 0.5);
+}
+
+.notes-panel-scroll::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+.notes-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+
+/* PDF page loading animation */
+.pdf-page-loading {
+  background: linear-gradient(90deg, #374151, #4b5563, #374151);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Selection tools styling */
+.tool-active {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2);
+  }
+}
+
+/* Google Docs Style Comment System */
+.comment-highlight {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-bottom: 2px solid #3b82f6;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.comment-highlight:hover {
+  background-color: rgba(59, 130, 246, 0.3);
+  border-bottom-color: #1d4ed8;
+}
+
+/* Text selection enhancement */
+::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+::-moz-selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+/* Comment popover animations */
+@keyframes popoverSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.comment-popover {
+  animation: popoverSlideIn 0.2s ease-out;
+}
+
+/* Comment indicator pulse */
+@keyframes commentPulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.comment-indicator {
+  animation: commentPulse 2s infinite;
+}
+
+.comment-indicator:hover {
+  animation: none;
+  transform: scale(1.2);
+}
+
+/* Smooth scrolling for comment navigation */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Enhanced text layer for better selection */
+.react-pdf__Page__textContent span {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* Comment thread styling */
+.comment-thread {
+  position: relative;
+}
+
+.comment-thread::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, #3b82f6, #1d4ed8);
+  border-radius: 1px;
+}
+
+/* Modal backdrop blur */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Responsive comment panel */
+@media (max-width: 768px) {
+  .comment-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    z-index: 100;
+  }
+
+  .comment-popover {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 300px;
+  }
+}
+
+/* Enhanced Text Selection for PDF */
+.smooth-selection .react-pdf__Page__textContent {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+  line-height: 1.2 !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+.smooth-selection .react-pdf__Page__textContent span {
+  color: transparent !important;
+  position: absolute !important;
+  white-space: pre !important;
+  cursor: text !important;
+  transform-origin: 0% 0% !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  pointer-events: auto !important;
+  font-family: inherit !important;
+  letter-spacing: normal !important;
+}
+
+/* Improved text selection behavior */
+.smooth-selection .react-pdf__Page__textContent span:hover {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+  transition: background-color 0.15s ease !important;
+}
+
+/* Custom selection styling */
+.smooth-selection .react-pdf__Page__textContent span::selection {
+  background-color: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+.smooth-selection .react-pdf__Page__textContent span::-moz-selection {
+  background-color: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Prevent text selection on unwanted elements */
+.smooth-selection .react-pdf__Page__canvas {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Comment popover improvements */
+.comment-popover {
+  animation: popoverSlideIn 0.2s ease-out;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 6px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(229, 231, 235, 0.2);
+}
+
+@keyframes popoverSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) translateX(-50%) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(-50%) scale(1);
+  }
+}
+
+/* Selection validation styles */
+.invalid-selection {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Smooth scrolling for better UX */
+.react-pdf__Page {
+  scroll-behavior: smooth;
+}
+
+/* Comment indicator improvements */
+.comment-indicator {
+  animation: commentPulse 2s infinite;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.comment-indicator:hover {
+  animation: none;
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.6);
+}
+
+@keyframes commentPulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+/* Modal backdrop blur enhancement */
+.modal-backdrop {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .comment-popover {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 90vw !important;
+    max-width: 300px !important;
+    z-index: 100 !important;
+  }
+
+  .smooth-selection .react-pdf__Page__textContent span {
+    font-size: 14px !important;
+    line-height: 1.3 !important;
+  }
+}
+
+/* Prevent text bleeding and improve selection precision */
+.react-pdf__Page__textContent {
+  contain: layout style paint;
+}
+
+.react-pdf__Page__textContent span {
+  will-change: background-color;
+  isolation: isolate;
+}
+
+/* Enhanced focus states */
+.comment-popover button:focus,
+.modal-backdrop button:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* Loading animation for text layer */
+.react-pdf__Page__textContent.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Text selection improvements for better accuracy */
+.react-pdf__Page__textContent span[data-font-name] {
+  font-family: inherit !important;
+}
+
+/* Prevent selection of empty space */
+.react-pdf__Page__textContent span:empty {
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Smooth transitions for all interactive elements */
+/* * {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+} */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.space-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+  overflow: hidden;
+  z-index: -10;
+}
+
+.nebula {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(63, 0, 113, 0.2) 0%,
+    rgba(33, 9, 107, 0.1) 40%,
+    rgba(0, 0, 30, 0) 70%
+  );
+  filter: blur(20px);
+  animation: rotate 300s linear infinite;
+  z-index: -8;
+  pointer-events: none;
+} 
+
+/* Change calendar icon color in datetime-local inputs to white */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+} 
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+
+
+@keyframes wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-wave {
+  animation: wave 1.5s ease-in-out infinite;
+}
+
+/* Hide scrollbar for chat input */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+} 

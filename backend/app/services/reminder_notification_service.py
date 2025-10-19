@@ -302,7 +302,7 @@ Due: {due_datetime_str}
 
 Don't forget to take care of your furry friend! 🐕
 
-You can manage your reminders at: {current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/reminders
+You can manage your reminders at: {current_app.config.get('FRONTEND_URL')}/reminders
 
 Best regards,
 Mr. White - Your AI Pet Care Assistant
@@ -358,7 +358,7 @@ Mr. White - Your AI Pet Care Assistant
             <p style="margin: 20px 0;">Don't forget to take care of your furry friend! 🐕</p>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/reminders" 
+                <a href="{current_app.config.get('FRONTEND_URL')}/reminders" 
                    style="display: inline-block; background-color: #000000; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; transition: background-color 0.3s;">
                     Manage Reminders
                 </a>
@@ -449,7 +449,7 @@ Mr. White - Your AI Pet Care Assistant
                 title=notification_title,
                 body=notification_body,
                 data=notification_data,
-                click_action=f"{current_app.config.get('FRONTEND_URL', 'http://localhost:3000')}/reminders"
+                click_action=f"{current_app.config.get('FRONTEND_URL')}/reminders"
             )
             
             # Log notification attempt

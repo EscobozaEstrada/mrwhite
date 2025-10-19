@@ -1,11 +1,12 @@
 'use client'
 
-import { FiCopy, FiThumbsUp, FiThumbsDown, FiVolume2, FiRefreshCw, FiFile } from 'react-icons/fi'
+import { FiCopy, FiThumbsUp, FiThumbsDown, FiVolume2, FiRefreshCw, FiFile, FiX, FiLoader, FiMusic } from 'react-icons/fi'
 import { FiCheck } from 'react-icons/fi'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { stopSpeaking } from '@/utils/messageUtils'
 
 interface MessageProps {
     id: string;
@@ -13,7 +14,8 @@ interface MessageProps {
     type: 'user' | 'ai';
     timestamp?: string;
     attachments?: Array<{
-        type: 'image' | 'file';
+        id?: number;
+        type: 'image' | 'file' | 'audio';
         url: string;
         name: string;
     }>;
@@ -21,9 +23,9 @@ interface MessageProps {
     disliked?: boolean;
     onCopy?: (content: string, stripFormatting?: boolean) => void;
     onLike?: (id: string, isLike: boolean) => void;
-    onSpeak?: (content: string) => void;
+    onSpeak?: (content: string, onStateChange?: (state: 'loading' | 'speaking' | 'stopped') => void) => void;
     onRetry?: (id: string) => void;
-    onDownload?: (url: string, filename: string) => void;
+    onDownload?: (url: string, filename: string, attachmentId?: number) => void;
 }
 
 export default function Message({
@@ -41,6 +43,7 @@ export default function Message({
     onDownload
 }: MessageProps) {
     const [copied, setCopied] = useState(false);
+    const [speakState, setSpeakState] = useState<'loading' | 'speaking' | 'stopped'>('stopped');
     
     const handleCopy = (text: string) => {
         if (onCopy) {
@@ -49,6 +52,26 @@ export default function Message({
             setTimeout(() => {
                 setCopied(false);
             }, 2000); // Show checkmark for 2 seconds
+        }
+    };
+
+    const handleLike = (isLike: boolean) => {
+        if (onLike) {
+            onLike(id, isLike);
+        }
+    };
+
+    const handleSpeak = () => {
+        if (onSpeak) {
+            // If already speaking, stop it and update UI
+            if (speakState === 'speaking') {
+                stopSpeaking();
+                setSpeakState('stopped');
+                return;
+            }
+            
+            // Otherwise, start speaking
+            onSpeak(content, setSpeakState);
         }
     };
     
@@ -64,7 +87,7 @@ export default function Message({
                 max-w-[80%]
             `}>
                 {/* Message Content with Markdown */}
-                {type === 'ai' ? (
+                {(type === 'ai' || /[*_`#\[\]]/g.test(content)) ? (
                     <div className="markdown-content text-[20px] max-[640px]:text-[14px]">
                         <ReactMarkdown 
                             remarkPlugins={[remarkGfm]}
@@ -76,7 +99,7 @@ export default function Message({
                                 ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4" {...props} />,
                                 ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-4" {...props} />,
                                 li: ({node, ...props}) => <li className="mb-1" {...props} />,
-                                a: ({node, ...props}) => <a className="text-blue-400 hover:underline" {...props} />,
+                                a: ({node, ...props}) => <a className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
                                 blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-neutral-500 pl-4 italic my-4" {...props} />,
                                 code: ({node, className, inline, ...props}: any) => 
                                     inline 
@@ -101,14 +124,23 @@ export default function Message({
                 <div className="mt-2 space-y-2">
                     {attachments?.map((attachment, index) => (
                         <div 
-                            key={index} 
+                            key={`${attachment.url}-${index}`}
                             className="flex items-center gap-2 p-2 bg-neutral-800/50 rounded"
                         >
-                            <FiFile className="text-neutral-400" />
-                            <span className="text-sm truncate">{attachment.name}</span>
+                            {attachment.type === 'audio' ? (
+                                <>
+                                    <FiMusic className="text-blue-400" />
+                                    <span className="text-sm truncate max-w-[200px]">{attachment.name}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <FiFile className="text-neutral-400" />
+                                    <span className="text-sm truncate">{attachment.name}</span>
+                                </>
+                            )}
                             {onDownload && (
                                 <button 
-                                    onClick={() => onDownload(attachment.url, attachment.name)}
+                                    onClick={() => onDownload(attachment.url, attachment.name, attachment.id)}
                                     className="ml-auto text-[12px] text-neutral-400 hover:text-white"
                                 >
                                     Download
@@ -133,14 +165,14 @@ export default function Message({
                         {onLike && (
                             <>
                                 <button
-                                    onClick={() => onLike(id, true)}
+                                    onClick={() => handleLike(true)}
                                     className={`p-1 ${liked ? 'text-green-400' : 'text-white hover:text-white/80'}`}
                                     title="Like"
                                 >
                                     <FiThumbsUp size={14} />
                                 </button>
                                 <button
-                                    onClick={() => onLike(id, false)}
+                                    onClick={() => handleLike(false)}
                                     className={`p-1 ${disliked ? 'text-red-400' : 'text-white hover:text-white/80'}`}
                                     title="Dislike"
                                 >
@@ -150,11 +182,26 @@ export default function Message({
                         )}
                         {onSpeak && (
                             <button
-                                onClick={() => onSpeak(content)}
-                                className="hover:text-white/80 p-1"
-                                title="Read aloud"
+                                onClick={handleSpeak}
+                                className={`p-1 ${
+                                    speakState === 'loading' ? 'text-blue-400 animate-pulse' : 
+                                    speakState === 'speaking' ? 'text-green-400' : 
+                                    'hover:text-white/80'
+                                }`}
+                                title={
+                                    speakState === 'loading' ? "Loading audio..." : 
+                                    speakState === 'speaking' ? "Stop reading" : 
+                                    "Read aloud"
+                                }
+                                disabled={speakState === 'loading'}
                             >
-                                <FiVolume2 size={14} />
+                                {speakState === 'loading' ? (
+                                    <FiLoader size={14} className="animate-spin" />
+                                ) : speakState === 'speaking' ? (
+                                    <FiX size={14} />
+                                ) : (
+                                    <FiVolume2 size={14} />
+                                )}
                             </button>
                         )}
                         {onRetry && (

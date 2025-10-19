@@ -1,122 +1,182 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://mrwhitedogbuddyai.com//(user)</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//(user)</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//the-way</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//the-way</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//talk/conversation/[conversationId]</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//talk/conversation/[conversationId]</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//subscription</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//subscription</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//subscription/manage</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//subscription/manage</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//reminders</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//reminders</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//questbook</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//questbook</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//product</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//product</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//product/[productId]</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//product/[productId]</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//my-hub</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//my-hub</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//events</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//google-docs-book-demo</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//contact</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//gallery</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//gallery/folder/[id]</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//events</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//enhanced-book-demo</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//documents</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//contact</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//care-archive</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//chat</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//account/credits</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//book-test</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//about</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//book</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//book/creation/[bookId]</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//book/[bookId]</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//account/settings</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//account/credits</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://mrwhiteaidogbuddy.com//about</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//payment-success</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//payment-success</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//payment</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//payment</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//signup</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//signup</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//reset-password/[token]</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//reset-password/[token]</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://mrwhitedogbuddyai.com//forgot-password</loc>
-    <lastmod>2025-07-02T10:07:15.561Z</lastmod>
+    <loc>https://mrwhiteaidogbuddy.com//forgot-password</loc>
+    <lastmod>2025-10-16T02:29:39.235Z</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>

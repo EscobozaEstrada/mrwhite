@@ -53,7 +53,7 @@ export default function TestimonialSlider({
 
   return (
     <div
-      className={`w-full relative max-[768px]:block max-[947px]:hidden max-[1074px]:h-[100px] bg-gradient-to-t from-white/10 to-[--background] p-4 ${className}`}
+      className={`w-full relative max-[768px]:block max-[947px]:hidden max-[1074px]:h-[100px] bg-gradient-to-t from-white/10 to-[--background] max-[768px]:mt-20 max-[550px]:mt-30 p-4 ${className}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     // style={{ minHeight: '160px' }}
@@ -65,7 +65,7 @@ export default function TestimonialSlider({
             }`}
         >
           <div className="w-full flex items-center justify-between gap-4">
-            <div className="w-16 h-16 max-[1074px]:w-8 max-[1074px]:h-8 max-[1200px]:w-12 max-[1200px]:h-12 relative">
+            <div className="w-16 h-16 max-[768px]:w-16 max-[768px]:h-16 max-[1074px]:w-8 max-[1074px]:h-8 max-[1200px]:w-12 max-[1200px]:h-12 relative">
               <Image
                 src={testimonial.image}
                 alt={`${testimonial.name} profile picture`}
@@ -74,14 +74,14 @@ export default function TestimonialSlider({
               />
             </div>
             <div className="flex-1 flex flex-col justify-between">
-              <p className="font-semibold max-[1074px]:text-[12px] max-[1200px]:text-[16px] text-[20px]/6 truncate">{testimonial.name}</p>
+              <p className="font-semibold max-[1074px]:text-[12px] max-[1200px]:text-[16px] text-[20px]/6 truncate max-[768px]:text-[20px]/6">{testimonial.name}</p>
               <div className="truncate">
-                <p className="text-[16px] max-[1074px]:text-[12px] font-light">{testimonial.location} | {renderStars(testimonial.rating)}</p>
+                <p className="text-[16px] max-[768px]:text-[16px] max-[1074px]:text-[12px] font-light">{testimonial.location} | {renderStars(testimonial.rating)}</p>
               </div>
             </div>
           </div>
           <div className="w-full tracking-tight mt-4 max-[1074px]:mt-2">
-            <p className="text-[20px] max-[1074px]:text-[12px] italic font-light max-[1200px]:text-[16px]">
+            <p className="text-[20px] max-[768px]:text-[20px] max-[1074px]:text-[12px] italic font-light max-[1200px]:text-[16px]">
               "{testimonial.text}"
             </p>
           </div>

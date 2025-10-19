@@ -101,11 +101,16 @@ def validate_signup_data(f):
     def decorated_function(*args, **kwargs):
         data = request.get_json()
         
-        # Validate JSON schema
-        required_fields = ['username', 'email', 'password', 'confirm_password']
-        valid, message = ValidationMiddleware.validate_json_schema(data, required_fields)
+        # Validate JSON schema - confirm_password and timezone are optional
+        required_fields = ['username', 'email', 'password']
+        optional_fields = ['confirm_password', 'timezone']
+        valid, message = ValidationMiddleware.validate_json_schema(data, required_fields, optional_fields)
         if not valid:
             return jsonify({'message': message}), 400
+        
+        # If confirm_password not provided, set it to same as password
+        if 'confirm_password' not in data:
+            data['confirm_password'] = data['password']
         
         # Validate email
         if not ValidationMiddleware.validate_email(data['email']):

@@ -50,58 +50,20 @@ export const CreditTracker = ({
     compact = false,
     showPurchaseOptions = true
 }: CreditTrackerProps) => {
-    const { user, creditRefreshTrigger } = useAuth();
-    const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(null);
+    const { user, creditStatus, forceCreditRefresh } = useAuth();
     const [loading, setLoading] = useState(true);
     const [claiming, setClaiming] = useState(false);
     const [purchasing, setPurchasing] = useState(false);
     const lastFetchTime = useRef<number>(0);
     const FETCH_COOLDOWN = 1000; // Minimum 1 second between API calls
 
-    const fetchCreditStatus = async () => {
-        // Rate limiting: prevent excessive API calls
-        const now = Date.now();
-        if (now - lastFetchTime.current < FETCH_COOLDOWN) {
-            return;
-        }
-        lastFetchTime.current = now;
-
-        if (!user) {
-            setLoading(false);
-            return;
-        }
-
-        try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/credit-system/status`, {
-                credentials: 'include'
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data) {
-                    setCreditStatus(result.data);
-                } else {
-                    console.error('CreditTracker: Invalid API response structure:', result);
-                    setCreditStatus(null);
-                }
-            } else {
-                const errorText = await response.text();
-                console.error('CreditTracker: Failed to fetch credit status:', response.status, errorText);
-                setCreditStatus(null);
-            }
-        } catch (error) {
-            console.error('CreditTracker: Error fetching credit status:', error);
-            setCreditStatus(null);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
         if (user) {
-            fetchCreditStatus();
+            setLoading(false);
+        } else {
+            setLoading(false);
         }
-    }, [user, creditRefreshTrigger]); // Listen for credit refresh triggers
+    }, [user, creditStatus]);
 
     const handleClaimDailyCredits = async () => {
         try {
@@ -117,7 +79,7 @@ export const CreditTracker = ({
             if (response.ok) {
                 const result = await response.json();
                 if (result.success) {
-                    await fetchCreditStatus();
+                    await forceCreditRefresh();
 
                     // Optional: Show success message
                     if (typeof window !== 'undefined') {
@@ -158,7 +120,7 @@ export const CreditTracker = ({
             setPurchasing(true);
             // This would integrate with your existing Stripe payment flow
             // For now, just show what would happen
-            const pkg = creditStatus?.credit_packages[packageId];
+            const pkg = creditStatus?.credit_packages?.[packageId];
             if (pkg) {
                 // Redirect to payment page with package info
                 window.location.href = `/payment?package=${packageId}&amount=${pkg.price}&credits=${pkg.credits + pkg.bonus}`;
@@ -198,22 +160,22 @@ export const CreditTracker = ({
             >
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Coins className={`w-5 h-5 ${getBalanceColor(creditStatus.available_credits)}`} />
+                        <Coins className={`w-5 h-5 ${getBalanceColor(creditStatus?.available_credits || 0)}`} />
                         <span className="text-sm font-medium">
-                            {creditStatus.available_credits} credits
+                            {creditStatus?.available_credits || 0} credits
                         </span>
                         <span className="text-xs text-gray-400 mr-2">
-                            ({formatCreditsAsUSD(creditStatus.available_credits)})
+                            ({formatCreditsAsUSD(creditStatus?.available_credits || 0)})
                         </span>
                     </div>
 
-                    {creditStatus.is_elite ? (
-                        <div className="flex items-center gap-1 text-xs text-[var(--mrwhite-primary-color)]">
+                    {creditStatus?.is_elite ? (
+                        <div className="flex items-center gap-1 text-xs text-[var(--mrwhite-primary-color)] ">
                             <Crown className="w-3 h-3" />
                             Elite
                         </div>
                     ) : (
-                        !creditStatus.daily_free_credits_claimed && (
+                        !creditStatus?.daily_free_credits_claimed && (
                             <Button
                                 size="sm"
                                 onClick={handleClaimDailyCredits}
@@ -227,11 +189,11 @@ export const CreditTracker = ({
                     )}
                 </div>
 
-                {creditStatus.available_credits < 100 && (
+                {(creditStatus?.available_credits || 0) < 100 && (
                     <div className="mt-2 text-xs text-[var(--mrwhite-primary-color)] flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         Low credits
-                        {creditStatus.can_purchase_credits && (
+                        {creditStatus?.can_purchase_credits && (
                             <span> - purchase more to continue</span>
                         )}
                     </div>
@@ -246,11 +208,11 @@ export const CreditTracker = ({
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <Coins className={`w-5 h-5 ${getBalanceColor(creditStatus.available_credits)}`} />
+                        <Coins className={`w-5 h-5 ${getBalanceColor(creditStatus?.available_credits || 0)}`} />
                         Credit Balance
                     </h3>
                     <div className="flex items-center gap-2 text-sm">
-                        {creditStatus.is_elite ? (
+                        {creditStatus?.is_elite ? (
                             <div className="flex items-center gap-1 text-[var(--mrwhite-primary-color)]">
                                 <Crown className="w-4 h-4" />
                                 Elite Pack
@@ -263,16 +225,16 @@ export const CreditTracker = ({
 
                 {/* Balance Display */}
                 <div className="text-center py-4">
-                    <div className={`text-3xl font-bold ${getBalanceColor(creditStatus.available_credits)}`}>
-                        {creditStatus.available_credits}
+                    <div className={`text-3xl font-bold ${getBalanceColor(creditStatus?.available_credits || 0)}`}>
+                        {creditStatus?.available_credits || 0}
                     </div>
                     <div className="text-sm text-gray-400">
-                        credits available ({formatCreditsAsUSD(creditStatus.available_credits)} value)
+                        credits available ({formatCreditsAsUSD(creditStatus?.available_credits || 0)} value)
                     </div>
                 </div>
 
                 {/* Elite Users - Monthly Allowance Info */}
-                {creditStatus.is_elite && (
+                {creditStatus?.is_elite && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -284,28 +246,28 @@ export const CreditTracker = ({
                                 <span className="font-medium text-blue-400">Monthly Allowance</span>
                             </div>
                             <span className="text-sm text-gray-300">
-                                {creditStatus.days_until_monthly_refill} days until refill
+                                {creditStatus?.days_until_monthly_refill} days until refill
                             </span>
                         </div>
 
                         <div className="space-y-2">
                             <div className="flex justify-between text-sm">
                                 <span>Used this month:</span>
-                                <span>{creditStatus.credits_used_this_month} credits</span>
+                                <span>{creditStatus?.credits_used_this_month || 0} credits</span>
                             </div>
                             <Progress
-                                value={creditStatus.monthly_allowance_used}
+                                value={creditStatus?.monthly_allowance_used || 0}
                                 className="h-2"
                             />
                             <div className="text-xs text-gray-400">
-                                {creditStatus.monthly_allowance_used.toFixed(1)}% of monthly allowance used
+                                {(creditStatus?.monthly_allowance_used || 0).toFixed(1)}% of monthly allowance used
                             </div>
                         </div>
                     </motion.div>
                 )}
 
                 {/* Free Users - Daily Credits */}
-                {!creditStatus.is_elite && !creditStatus.daily_free_credits_claimed && creditStatus.plan_info && (
+                {!creditStatus?.is_elite && !creditStatus?.daily_free_credits_claimed && creditStatus?.plan_info && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -318,8 +280,8 @@ export const CreditTracker = ({
                                     <span className="font-medium text-green-400">Daily Free Credits</span>
                                 </div>
                                 <p className="text-sm text-gray-300">
-                                    Claim your {creditStatus.plan_info?.daily_free_credits || 0} free credits
-                                    ({formatCreditsAsUSD(creditStatus.plan_info?.daily_free_credits || 0)} value)
+                                    Claim your {creditStatus?.plan_info?.daily_free_credits || 0} free credits
+                                    ({formatCreditsAsUSD(creditStatus?.plan_info?.daily_free_credits || 0)} value)
                                 </p>
                             </div>
                             <Button
@@ -338,26 +300,26 @@ export const CreditTracker = ({
                     <div className="bg-white/10 border border-white/30 rounded-sm p-3">
                         <div className="text-sm  mb-1">Today's Usage</div>
                         <div className="font-medium">
-                            {creditStatus.credits_used_today} credits
+                            {creditStatus?.credits_used_today || 0} credits
                         </div>
                         <div className="text-xs">
-                            {formatCreditsAsUSD(creditStatus.credits_used_today)}
+                            {formatCreditsAsUSD(creditStatus?.credits_used_today || 0)}
                         </div>
                     </div>
 
                     <div className="bg-white/10 border border-white/30 rounded-sm p-3">
                         <div className="text-sm mb-1">Monthly Usage</div>
                         <div className="font-medium">
-                            {creditStatus.credits_used_this_month} credits
+                            {creditStatus?.credits_used_this_month || 0} credits
                         </div>
                         <div className="text-xs">
-                            {formatCreditsAsUSD(creditStatus.credits_used_this_month)}
+                            {formatCreditsAsUSD(creditStatus?.credits_used_this_month || 0)}
                         </div>
                     </div>
                 </div>
 
                 {/* Credit Purchase Options - Only for Elite Users */}
-                {creditStatus.can_purchase_credits && showPurchaseOptions && creditStatus.credit_packages && (
+                {creditStatus?.can_purchase_credits && showPurchaseOptions && creditStatus?.credit_packages && (
                     <div className="space-y-3">
                         <h4 className="font-medium flex items-center gap-2">
                             <ShoppingCart className="w-4 h-4" />
@@ -365,7 +327,7 @@ export const CreditTracker = ({
                         </h4>
 
                         <div className="grid grid-cols-1 gap-2">
-                            {Object.entries(creditStatus.credit_packages).map(([key, pkg]: [string, any]) => {
+                            {Object.entries(creditStatus?.credit_packages).map(([key, pkg]: [string, any]) => {
                                 const totalCredits = pkg.credits + pkg.bonus;
                                 const savings = pkg.bonus > 0 ? Math.round((pkg.bonus / pkg.credits) * 100) : 0;
 
@@ -406,7 +368,7 @@ export const CreditTracker = ({
                 )}
 
                 {/* Upgrade Prompt for Free Users */}
-                {!creditStatus.is_elite && (
+                {!creditStatus?.is_elite && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -424,13 +386,13 @@ export const CreditTracker = ({
                             className="w-full bg-gradient-to-r whitespace-break-spaces from-[var(--mrwhite-primary-color)] to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-black font-medium"
                             onClick={() => window.location.href = '/subscription'}
                         >
-                            Upgrade to Elite Pack - $28.95/month
+                            Upgrade to Elite Pack - $19.95/month
                         </Button>
                     </motion.div>
                 )}
 
                 {/* Low Balance Warning */}
-                {creditStatus.available_credits < 100 && creditStatus.is_elite && (
+                {(creditStatus?.available_credits || 0) < 100 && creditStatus?.is_elite && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -442,7 +404,7 @@ export const CreditTracker = ({
                         </div>
                         <p className="text-sm text-red-300 mt-1">
                             You're running low on credits. Purchase additional credits to continue
-                            using all features until your next monthly refill in {creditStatus.days_until_monthly_refill} days.
+                            using all features until your next monthly refill in {creditStatus?.days_until_monthly_refill} days.
                         </p>
                     </motion.div>
                 )}

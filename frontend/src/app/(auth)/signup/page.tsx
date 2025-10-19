@@ -48,6 +48,9 @@ const SignupPage = () => {
       return;
     }
 
+    // 🌍 GLOBAL TIMEZONE DETECTION: Automatically detect user's timezone
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     setIsLoading(true);
     setError('');
 
@@ -57,7 +60,16 @@ const SignupPage = () => {
         email: signupForm.email,
         password: signupForm.password,
         confirm_password: signupForm.confirmPassword,
+        timezone: userTimezone, // 🌍 Send user's detected timezone
       }, { withCredentials: true });
+
+      // Extract token from cookie and store in localStorage for cross-port access
+      const tokenCookie = document.cookie.split('; ').find(row => row.startsWith('token='));
+      if (tokenCookie) {
+        const token = tokenCookie.split('=')[1];
+        localStorage.setItem('token', token);
+        console.log('✅ Token stored in localStorage for cross-port access');
+      }
 
       const userRes = await axios.get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/me`, {
         withCredentials: true,
@@ -130,19 +142,21 @@ const SignupPage = () => {
           }}
         >
           {/* Header */}
-          <motion.div className="text-center mb-8 flex gap-4" variants={fadeInUp} custom={0}>
-            <motion.div className="flex justify-center mb-4" variants={fadeInUp} custom={1}>
-              <Image src="/assets/logo.png" alt="Dog" width={60} height={60} />
+          <motion.div className="text-center mb-8 flex flex-col sm:flex-row items-center gap-4" variants={fadeInUp} custom={0}>
+            <motion.div className="flex justify-center" variants={fadeInUp} custom={1}>
+              <div className="relative w-16 h-16 flex-shrink-0">
+                <Image src="/assets/logo.png" alt="Dog" fill className="object-contain" />
+              </div>
             </motion.div>
-            <motion.div className="flex flex-col justify-center mb-4" variants={fadeInUp} custom={2}>
+            <motion.div className="flex flex-col font-work-sans justify-center text-center sm:text-left" variants={fadeInUp} custom={2}>
               <h1 className="text-2xl font-bold text-[var(--mrwhite-primary-color)]">Mr. White</h1>
-              <p className="text-gray-400 text-sm">Guide to All Paws</p>
+              <p className="text-gray-400 text-sm ">AI Assistant for Dog Care & Beyond</p>
             </motion.div>
           </motion.div>
 
           {/* Signup Form */}
           <motion.div
-            className="space-y-4 w-full"
+            className="space-y-4 w-full font-work-sans"
             onKeyDown={handleKeyDown}
             initial="hidden"
             animate="visible"
@@ -218,7 +232,7 @@ const SignupPage = () => {
               <button
                 type="button"
                 onClick={() => router.push('/login')}
-                className="text-[var(--mrwhite-primary-color)] underline text-sm cursor-pointer"
+                className="text-[var(--mrwhite-primary-color)] hover:underline text-sm cursor-pointer"
               >
                 Already have an account? Login
               </button>
@@ -234,13 +248,13 @@ const SignupPage = () => {
               className="w-full cursor-pointer bg-[var(--mrwhite-primary-color)] text-black font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isLoading ?
-               <div className="relative w-12 h-6">
+               <div className="relative w-12 h-6 flex-shrink-0">
                   <Image 
                     src="/assets/running-dog.gif" 
                     alt="Loading" 
                     fill
                     priority
-                    className="object-cover"
+                    className="object-contain"
                   />
                 </div> : <User className="w-5 h-5" />}
               {isLoading ? 'Creating Account...' : 'Create Account'}

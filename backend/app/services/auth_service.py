@@ -12,9 +12,12 @@ class AuthService:
     """Service class for handling authentication operations"""
     
     @staticmethod
-    def create_user(username: str, email: str, password: str, confirm_password: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    def create_user(username: str, email: str, password: str, confirm_password: str, timezone: str = 'UTC') -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
-        Create a new user account
+        Create a new user account with timezone support
+        
+        Args:
+            timezone: User's timezone (e.g., 'America/New_York', 'Asia/Kolkata', 'Europe/London')
         
         Returns:
             Tuple of (success: bool, message: str, user_data: Optional[Dict])
@@ -33,9 +36,16 @@ class AuthService:
             if len(password) < 8:
                 return False, 'Password must be at least 8 characters long', None
             
-            # Create user
+            # 🌍 TIMEZONE VALIDATION: Validate timezone format
+            try:
+                import pytz
+                pytz.timezone(timezone)  # This will raise an exception if timezone is invalid
+            except:
+                timezone = 'UTC'  # Fallback to UTC if invalid timezone
+            
+            # Create user with timezone
             hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-            new_user = User(username=username, email=email, password_hash=hashed_password)
+            new_user = User(username=username, email=email, password_hash=hashed_password, timezone=timezone)
             
             db.session.add(new_user)
             db.session.commit()
@@ -228,6 +238,10 @@ class AuthService:
                 current_app.logger.warning(f"Token expired during reset - Expired at: {token_expires}, Current time: {current_time}")
                 return False, 'Token has expired'
             
+            # Check if new password is the same as current password
+            if bcrypt.check_password_hash(user.password_hash, password):
+                return False, 'You cannot use your current password. Please enter a new password.'
+            
             # Update password and clear token
             hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
             user.password_hash = hashed_password
@@ -260,7 +274,7 @@ class AuthService:
                     <p>This link will expire in 24 hours.</p>
                     <p>If you did not request this, please ignore this email.</p>
                     <hr style="border: 1px solid #333; margin: 20px 0;">
-                    <p style="text-align: center; font-size: 12px; color: #999;">Mr. White - Guide to All Paws</p>
+                    <p style="text-align: center; font-size: 12px; color: #999;">Mr. White - AI Assistant for Dog Care & Beyond</p>
                 </div>
             </body>
         </html>

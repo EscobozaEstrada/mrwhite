@@ -8,8 +8,9 @@ backlog = 2048
 workers = 4
 worker_class = "sync"
 worker_connections = 1000
-timeout = 30
-keepalive = 2
+timeout = 120  # Increased from 30 to 120 seconds for AI processing
+graceful_timeout = 30  # Added graceful shutdown timeout
+keepalive = 5  # Increased from 2 to 5 seconds
 max_requests = 1000
 max_requests_jitter = 50
 

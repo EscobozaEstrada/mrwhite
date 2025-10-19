@@ -6,6 +6,7 @@ import logging
 from app.models.user import User
 from app import db
 from datetime import datetime
+import os
 
 credit_system_bp = Blueprint('credit_system', __name__)
 logger = logging.getLogger(__name__)
@@ -13,12 +14,16 @@ logger = logging.getLogger(__name__)
 def add_cors_headers(response):
     """Add CORS headers to response"""
     origin = request.headers.get('Origin')
-    allowed_origins = ['http://localhost:3000', 'http://localhost:3005']
+
+    allowed_origins = [
+        os.getenv('FRONTEND_URL')  # Production frontend URL
+    ]
     
     if origin in allowed_origins:
         response.headers['Access-Control-Allow-Origin'] = origin
     else:
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        # Default to production URL if origin not recognized
+        response.headers['Access-Control-Allow-Origin'] = os.getenv('FRONTEND_URL')
     
     response.headers['Access-Control-Allow-Credentials'] = 'true'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
@@ -281,6 +286,71 @@ def check_action_credits():
         
     except Exception as e:
         logging.error(f"Error checking action credits: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@credit_system_bp.route('/check-and-deduct', methods=['POST'])
+@cross_origin(supports_credentials=True)
+@require_auth
+def check_and_deduct_credits():
+    """Check and deduct credits for an action (used by intelligent chat)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        action = data.get('action')
+        metadata = data.get('metadata', {})
+        
+        # Verify user_id matches authenticated user
+        if user_id != g.user_id:
+            return jsonify({'error': 'User ID mismatch'}), 403
+        
+        if not action:
+            return jsonify({'error': 'Action is required'}), 400
+        
+        credit_service = CreditSystemService()
+        can_perform, message, cost = credit_service.check_and_deduct_credits(
+            g.user_id, action, metadata
+        )
+        
+        if not can_perform:
+            return jsonify({
+                'error': 'Insufficient credits',
+                'message': message,
+                'required_credits': cost
+            }), 402
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'cost': cost,
+            'credits_deducted': cost
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error checking and deducting credits: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@credit_system_bp.route('/user/<int:user_id>/credits', methods=['GET'])
+@cross_origin(supports_credentials=True)
+@require_auth
+def get_user_credits(user_id):
+    """Get user's current credit balance (used by intelligent chat)"""
+    try:
+        # Verify user_id matches authenticated user
+        if user_id != g.user_id:
+            return jsonify({'error': 'User ID mismatch'}), 403
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({
+            'success': True,
+            'credits_balance': user.credits_balance or 0,
+            'user_id': user_id
+        }), 200
+        
+    except Exception as e:
+        logging.error(f"Error getting user credits: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @credit_system_bp.route('/packages', methods=['GET'])

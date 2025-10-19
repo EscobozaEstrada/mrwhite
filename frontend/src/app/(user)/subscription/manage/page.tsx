@@ -1,70 +1,104 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import axios from 'axios';
+import toast from '@/components/ui/sound-toast';
 import {
+    CheckCircle,
+    AlertTriangle,
+    X,
+    CreditCard,
+    ExternalLink,
+    Zap,
+    Coins,
+    TrendingUp,
+    Plus,
+    ShoppingCart,
     Crown,
     Calendar,
-    CreditCard,
-    AlertTriangle,
-    CheckCircle,
     Settings,
     Download,
-    X,
-    ExternalLink,
-    Coins,
-    Plus,
-    TrendingUp,
-    Zap,
-    ShoppingCart
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { CreditDisplay } from '@/components/CreditDisplay';
+
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 import { Progress } from '@/components/ui/progress';
-import axios from 'axios';
-import { toast } from 'react-toastify';
+import CreditDisplay from '@/components/CreditDisplay';
+import CancelSubscriptionDialog from './_components/CancelSubscriptionDialog';
+import ReactivateSubscriptionDialog from './_components/ReactivateSubscriptionDialog';
 
 const SubscriptionManagePage = () => {
-    const { user, refreshSubscriptionStatus } = useAuth();
+    const { user, refreshSubscriptionStatus, creditStatus } = useAuth();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [cancelLoading, setCancelLoading] = useState(false);
-    const [creditStatus, setCreditStatus] = useState<any>(null);
-    const [creditLoading, setCreditLoading] = useState(true);
+    const [creditLoading, setCreditLoading] = useState(false);
+    const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [showReactivateDialog, setShowReactivateDialog] = useState(false);
+    const [showCancelSuccess, setShowCancelSuccess] = useState(false);
+    const [showReactivateSuccess, setShowReactivateSuccess] = useState(false);
 
-    // Redirect if not premium user
+    // Redirect if not premium user and handle subscription status changes
     useEffect(() => {
         if (user && !user.is_premium) {
             router.push('/subscription');
         }
-    }, [user, router]);
-
-    useEffect(() => {
-        if (user) {
-            fetchCreditStatus();
-        }
-    }, [user]);
-
-    const fetchCreditStatus = async () => {
-        try {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/credit-system/status`,
-                { credentials: 'include' }
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-                setCreditStatus(data.data);
-            }
-        } catch (error) {
-            console.error('Error fetching credit status:', error);
-        } finally {
+        
+        // Set credit loading state based on creditStatus
+        if (creditStatus) {
             setCreditLoading(false);
         }
-    };
+
+        // Log subscription details for debugging
+        if (user && user.subscription_status === 'canceled') {
+            console.log('Subscription end date:', user.subscription_end_date);
+            
+            // If subscription was just canceled, show success message
+            if (!showCancelSuccess) {
+                setShowCancelSuccess(true);
+            }
+        }
+    }, [user, router, creditStatus, showCancelSuccess]);
+
+    // Refresh subscription status periodically
+    useEffect(() => {
+        // Initial refresh
+        const refreshStatus = async () => {
+            if (user) {
+                await refreshSubscriptionStatus(undefined, true);
+            }
+        };
+        
+        // Set up periodic refresh
+        const intervalId = setInterval(refreshStatus, 10000); // Every 10 seconds
+        
+        // Clean up
+        return () => clearInterval(intervalId);
+    }, [user, refreshSubscriptionStatus]);
+
+    // Reset success message after 5 seconds
+    useEffect(() => {
+        if (showCancelSuccess) {
+            const timer = setTimeout(() => {
+                setShowCancelSuccess(false);
+            }, 5000);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [showCancelSuccess]);
+
+    useEffect(() => {
+        if (showReactivateSuccess) {
+            const timer = setTimeout(() => {
+                setShowReactivateSuccess(false);
+            }, 5000);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [showReactivateSuccess]);
 
     const handleBillingPortal = async () => {
         try {
@@ -87,10 +121,6 @@ const SubscriptionManagePage = () => {
     };
 
     const handleCancelSubscription = async () => {
-        if (!confirm('Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing period.')) {
-            return;
-        }
-
         try {
             setCancelLoading(true);
             const response = await axios.post(
@@ -101,7 +131,16 @@ const SubscriptionManagePage = () => {
 
             if (response.status === 200) {
                 toast.success('Subscription canceled successfully');
-                await refreshSubscriptionStatus();
+                console.log('Cancellation response:', response.data);
+                
+                // Force refresh subscription status to bypass cooldown
+                await refreshSubscriptionStatus(undefined, true);
+                setShowCancelDialog(false);
+                
+                // Force a second refresh after a short delay to ensure we get the updated status from Stripe
+                setTimeout(async () => {
+                    await refreshSubscriptionStatus(undefined, true);
+                }, 1000);
             }
         } catch (error) {
             console.error('Error canceling subscription:', error);
@@ -111,13 +150,59 @@ const SubscriptionManagePage = () => {
         }
     };
 
+    const handleReactivateSubscription = async () => {
+        try {
+            setCancelLoading(true);
+            const response = await axios.post(
+                `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/subscription/reactivate`,
+                {},
+                { withCredentials: true }
+            );
+
+            if (response.status === 200) {
+                toast.success('Subscription reactivated successfully');
+                console.log('Reactivation response:', response.data);
+                
+                // Force refresh subscription status to bypass cooldown
+                await refreshSubscriptionStatus(undefined, true);
+                setShowReactivateDialog(false);
+                
+                // Force a second refresh after a short delay to ensure we get the updated status from Stripe
+                setTimeout(async () => {
+                    await refreshSubscriptionStatus(undefined, true);
+                    setShowReactivateSuccess(true);
+                }, 1000);
+            }
+        } catch (error) {
+            console.error('Error reactivating subscription:', error);
+            toast.error('Failed to reactivate subscription');
+        } finally {
+            setCancelLoading(false);
+        }
+    };
+
     const formatDate = (dateString?: string) => {
         if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+        
+        try {
+            // Try to parse the date string
+            const date = new Date(dateString);
+            
+            // Check if date is valid
+            if (isNaN(date.getTime())) {
+                console.error('Invalid date string:', dateString);
+                return 'N/A';
+            }
+            
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        } catch (error) {
+            console.error('Error formatting date:', error, dateString);
+            return 'N/A';
+        }
     };
 
     const formatCreditsAsUSD = (credits: number) => {
@@ -195,50 +280,54 @@ const SubscriptionManagePage = () => {
                                 Subscription Status
                             </h2>
 
-                            <div className="space-y-3">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Plan:</span>
-                                    <span className="font-medium">Elite Pack</span>
+                            <div className="mb-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="text-sm text-muted-foreground">Status:</div>
+                                    <div className={`text-sm font-medium ${getStatusColor(user.subscription_status)}`}>
+                                        {user.subscription_status === 'active' && 'Active'}
+                                        {user.subscription_status === 'canceled' && 'Canceled - Access until period end'}
+                                        {user.subscription_status === 'past_due' && 'Past Due'}
+                                        {!user.subscription_status && 'Inactive'}
+                                    </div>
                                 </div>
 
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Status:</span>
-                                    <span className={`font-medium capitalize ${getStatusColor(user.subscription_status)}`}>
-                                        {user.subscription_status || 'Unknown'}
-                                    </span>
-                                </div>
-
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Started:</span>
-                                    <span className="font-medium">{formatDate(user.subscription_start_date)}</span>
-                                </div>
-
-                                {user.subscription_status === 'canceled' && user.subscription_end_date && (
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Expires:</span>
-                                        <span className="font-medium text-yellow-500">
-                                            {formatDate(user.subscription_end_date)}
-                                        </span>
+                                {user.subscription_status === 'canceled' && (
+                                    <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                                        <Calendar className="w-4 h-4 text-yellow-500" />
+                                        <div className="text-sm">
+                                            {user.subscription_end_date ? (
+                                                <>Your subscription will end on <span className="font-medium">{formatDate(user.subscription_end_date)}</span></>
+                                            ) : (
+                                                <>Your subscription will end at the end of your current billing period</>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Last Payment:</span>
-                                    <span className="font-medium">{formatDate(user.last_payment_date)}</span>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="text-sm text-muted-foreground">Start Date:</div>
+                                    <div className="text-sm">{formatDate(user.subscription_start_date)}</div>
                                 </div>
-
-                                {user.payment_failed && (
-                                    <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
-                                        <div className="flex items-center gap-2 text-red-400">
-                                            <AlertTriangle className="w-4 h-4" />
-                                            <span className="text-sm font-medium">Payment Failed</span>
-                                        </div>
-                                        <p className="text-sm text-red-300 mt-1">
-                                            Please update your payment method to continue your subscription.
-                                        </p>
+                                
+                                {user.subscription_status !== 'canceled' && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-sm text-muted-foreground">Next Billing:</div>
+                                        <div className="text-sm">{formatDate(user.subscription_end_date)}</div>
                                     </div>
                                 )}
                             </div>
+
+                            {user.payment_failed && (
+                                <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3">
+                                    <div className="flex items-center gap-2 text-red-400">
+                                        <AlertTriangle className="w-4 h-4" />
+                                        <span className="text-sm font-medium">Payment Failed</span>
+                                    </div>
+                                    <p className="text-sm text-red-300 mt-1">
+                                        Please update your payment method to continue your subscription.
+                                    </p>
+                                </div>
+                            )}
                         </Card>
                     </motion.div>
 
@@ -290,16 +379,6 @@ const SubscriptionManagePage = () => {
                                         </span>
                                     </div>
 
-                                    {creditStatus.monthly_allowance_used !== undefined && (
-                                        <div className="mt-4">
-                                            <div className="flex justify-between text-sm mb-2">
-                                                <span>Monthly allowance used:</span>
-                                                <span>{creditStatus.monthly_allowance_used.toFixed(1)}%</span>
-                                            </div>
-                                            <Progress value={creditStatus.monthly_allowance_used} className="h-2" />
-                                        </div>
-                                    )}
-
                                     {creditStatus.available_credits < 100 && (
                                         <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3 mt-3">
                                             <div className="flex items-center gap-2 text-red-400">
@@ -330,6 +409,30 @@ const SubscriptionManagePage = () => {
                                 Subscription Actions
                             </h2>
 
+                            {showCancelSuccess && user.subscription_status === 'canceled' && (
+                                <div className="bg-green-900/20 border border-green-500/50 rounded-lg p-3 mb-4 animate-fade-in">
+                                    <div className="flex items-center gap-2 text-green-400">
+                                        <CheckCircle className="w-4 h-4" />
+                                        <span className="text-sm font-medium">Subscription Canceled Successfully</span>
+                                    </div>
+                                    <p className="text-sm text-green-300 mt-1">
+                                        Your subscription will remain active until {formatDate(user.subscription_end_date)}.
+                                    </p>
+                                </div>
+                            )}
+
+                            {showReactivateSuccess && user.subscription_status === 'active' && (
+                                <div className="bg-green-900/20 border border-green-500/50 rounded-lg p-3 mb-4 animate-fade-in">
+                                    <div className="flex items-center gap-2 text-green-400">
+                                        <CheckCircle className="w-4 h-4" />
+                                        <span className="text-sm font-medium">Subscription Reactivated Successfully</span>
+                                    </div>
+                                    <p className="text-sm text-green-300 mt-1">
+                                        Your subscription is now active and will continue to renew automatically.
+                                    </p>
+                                </div>
+                            )}
+
                             <div className="space-y-3">
                                 <Button
                                     onClick={handleBillingPortal}
@@ -351,18 +454,11 @@ const SubscriptionManagePage = () => {
                                     View All Plans
                                 </Button>
 
-                                <Button
-                                    onClick={() => router.push('/care-archive')}
-                                    className="w-full justify-start"
-                                    variant="outline"
-                                >
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Access Care Archive
-                                </Button>
+
 
                                 {user.subscription_status === 'active' && (
                                     <Button
-                                        onClick={handleCancelSubscription}
+                                        onClick={() => setShowCancelDialog(true)}
                                         disabled={cancelLoading}
                                         className="w-full justify-start"
                                         variant="destructive"
@@ -370,6 +466,31 @@ const SubscriptionManagePage = () => {
                                         <X className="w-4 h-4 mr-2" />
                                         {cancelLoading ? 'Canceling...' : 'Cancel Subscription'}
                                     </Button>
+                                )}
+
+                                {user.subscription_status === 'canceled' && (
+                                    <>
+                                        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 mb-3">
+                                            <div className="flex items-center gap-2 text-yellow-400">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                <span className="text-sm font-medium">Subscription Canceled</span>
+                                            </div>
+                                            <p className="text-sm text-yellow-300/80 mt-1">
+                                                Your subscription has been canceled and will end on {formatDate(user.subscription_end_date)}.
+                                                You can reactivate your subscription before this date to continue your benefits.
+                                            </p>
+                                        </div>
+                                        
+                                        <Button
+                                            onClick={() => setShowReactivateDialog(true)}
+                                            disabled={cancelLoading}
+                                            className="w-full justify-start"
+                                            variant="outline"
+                                        >
+                                            <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                                            Reactivate Subscription
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </Card>
@@ -439,7 +560,7 @@ const SubscriptionManagePage = () => {
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {Object.entries(creditStatus.credit_packages || {}).map(([key, pkg]: [string, any]) => {
+                                {Object.entries((creditStatus as any).credit_packages || {}).map(([key, pkg]: [string, any]) => {
                                     const totalCredits = pkg.credits + pkg.bonus;
                                     const savings = pkg.bonus > 0 ? Math.round((pkg.bonus / pkg.credits) * 100) : 0;
 
@@ -526,7 +647,25 @@ const SubscriptionManagePage = () => {
                     <h2 className="text-xl font-semibold mb-4">Detailed Credit Information</h2>
                     <CreditDisplay variant="mobile" />
                 </motion.div>
+
+                
             </div>
+            
+            {/* Cancel Subscription Dialog */}
+            <CancelSubscriptionDialog 
+                open={showCancelDialog}
+                onOpenChange={setShowCancelDialog}
+                onConfirm={handleCancelSubscription}
+                loading={cancelLoading}
+            />
+
+            {/* Reactivate Subscription Dialog */}
+            <ReactivateSubscriptionDialog
+                open={showReactivateDialog}
+                onOpenChange={setShowReactivateDialog}
+                onConfirm={handleReactivateSubscription}
+                loading={cancelLoading}
+            />
         </div>
     );
 };

@@ -24,48 +24,18 @@ import { CreditTracker } from '@/components/CreditTracker';
 import { Progress } from '@/components/ui/progress';
 
 const CreditManagementPage = () => {
-    const { user, creditRefreshTrigger, triggerCreditRefresh } = useAuth();
-    const router = useRouter();
-    const [creditStatus, setCreditStatus] = useState<any>(null);
+    const { user, creditStatus, forceCreditRefresh } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [claiming, setClaiming] = useState(false);
+    const router = useRouter();
 
     useEffect(() => {
-        if (user) {
-            fetchCreditStatus();
-        } else {
+        if (!user) {
             router.push('/login');
-        }
-    }, [user, router, creditRefreshTrigger]);
-
-    const fetchCreditStatus = async () => {
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5001';
-            const url = `${apiUrl}/api/credit-system/status`;
-
-            const response = await fetch(url, {
-                credentials: 'include'
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data) {
-                    setCreditStatus(result.data);
-                } else {
-                    console.error('Invalid API response structure:', result);
-                    setCreditStatus(null);
-                }
-            } else {
-                const errorText = await response.text();
-                console.error('Credits page: Error fetching credit status:', response.status, errorText);
-                setCreditStatus(null);
-            }
-        } catch (error) {
-            console.error('Credits page: Error fetching credit status:', error);
-            setCreditStatus(null);
-        } finally {
+        } else {
             setLoading(false);
         }
-    };
+    }, [user, router, creditStatus]);
 
     const formatCreditsAsUSD = (credits: number) => {
         return `$${(credits / 100).toFixed(2)}`;
@@ -75,6 +45,40 @@ const CreditManagementPage = () => {
         if (credits < 100) return 'text-red-400';
         if (credits < 500) return 'text-[var(--mrwhite-primary-color)]';
         return 'text-green-400';
+    };
+
+    const handleClaimCredits = async () => {
+        try {
+            setClaiming(true);
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/credit-system/claim-daily`,
+                {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }
+            );
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    await forceCreditRefresh();
+                    console.log('✅ Credits claimed successfully!');
+                } else {
+                    console.warn('Claim request succeeded but operation failed:', result.message);
+                }
+            } else {
+                const errorData = await response.json();
+                const errorMessage = errorData.message || `Failed to claim credits (Status: ${response.status})`;
+                console.warn('Unable to claim daily credits:', errorMessage);
+            }
+        } catch (error) {
+            console.error('Error claiming daily credits:', error);
+        } finally {
+            setClaiming(false);
+        }
     };
 
     if (loading || !creditStatus) {
@@ -105,7 +109,7 @@ const CreditManagementPage = () => {
                     className="mb-8"
                 >
                     <h1 className="text-4xl font-bold text-foreground mb-2 flex items-center gap-3">
-                        <Coins className={`w-8 h-8 ${getBalanceColor(creditStatus.available_credits)}`} />
+                        <Coins className={`w-8 h-8 ${getBalanceColor(creditStatus?.available_credits || 0)}`} />
                         Credit Management
                     </h1>
                     <p className="text-muted-foreground">
@@ -123,7 +127,7 @@ const CreditManagementPage = () => {
                     <Card className="p-6 bg-gradient-to-r from-white/10 to-black/30 border border-white/30">
                         <div className="text-center">
                             <div className="flex items-center justify-center gap-2 mb-4">
-                                {creditStatus.is_elite ? (
+                                {creditStatus?.is_elite ? (
                                     <div className="flex items-center gap-2 text-[var(--mrwhite-primary-color)]">
                                         <Crown className="w-6 h-6" />
                                         <span className="text-lg font-semibold">Elite Pack Member</span>
@@ -136,20 +140,21 @@ const CreditManagementPage = () => {
                                 )}
                             </div>
 
-                            <div className={`text-5xl font-bold mb-2 ${getBalanceColor(creditStatus.available_credits)}`}>
-                                {creditStatus.available_credits}
+                            <div className={`text-5xl font-bold mb-2 ${getBalanceColor(creditStatus?.available_credits || 0)}`}>
+                                {creditStatus?.available_credits || 0}
                             </div>
                             <div className="text-lg text-gray-300 mb-4">
-                                credits available ({formatCreditsAsUSD(creditStatus.available_credits)} value)
+                                credits available ({formatCreditsAsUSD(creditStatus?.available_credits || 0)} value)
                             </div>
 
-                            {!creditStatus.is_elite && !creditStatus.daily_free_credits_claimed && creditStatus.plan_info && (
+                            {!creditStatus?.is_elite && !creditStatus?.daily_free_credits_claimed && creditStatus?.plan_info && (
                                 <Button
                                     className="bg-green-600 hover:bg-green-700"
-                                    onClick={() => window.location.reload()}
+                                    onClick={handleClaimCredits}
+                                    disabled={claiming}
                                 >
                                     <Gift className="w-4 h-4 mr-2" />
-                                    Claim {creditStatus.plan_info?.daily_free_credits || 0} Free Credits Today
+                                    {claiming ? 'Claiming...' : `Claim ${creditStatus?.plan_info?.daily_free_credits || 0} Free Credits Today`}
                                 </Button>
                             )}
                         </div>
@@ -173,32 +178,32 @@ const CreditManagementPage = () => {
                                 <div className="bg-gray-800/50 rounded-sm p-4">
                                     <div className="text-sm text-gray-400 mb-1">Today's Usage</div>
                                     <div className="text-2xl font-bold text-white">
-                                        {creditStatus.credits_used_today}
+                                        {creditStatus?.credits_used_today || 0}
                                     </div>
                                     <div className="text-xs text-gray-500">
-                                        {formatCreditsAsUSD(creditStatus.credits_used_today)} spent
+                                        {formatCreditsAsUSD(creditStatus?.credits_used_today || 0)} spent
                                     </div>
                                 </div>
 
                                 <div className="bg-gray-800/50 rounded-sm p-4">
                                     <div className="text-sm text-gray-400 mb-1">This Month</div>
                                     <div className="text-2xl font-bold text-white">
-                                        {creditStatus.credits_used_this_month}
+                                        {creditStatus?.credits_used_this_month || 0}
                                     </div>
                                     <div className="text-xs text-gray-500">
-                                        {formatCreditsAsUSD(creditStatus.credits_used_this_month)} spent
+                                        {formatCreditsAsUSD(creditStatus?.credits_used_this_month || 0)} spent
                                     </div>
                                 </div>
 
-                                {creditStatus.is_elite && (
+                                {creditStatus?.is_elite && (
                                     <div className="bg-blue-900/30 border border-blue-500/50 rounded-sm p-4">
                                         <div className="text-sm text-blue-400 mb-2">Monthly Allowance Used</div>
                                         <Progress
-                                            value={creditStatus.monthly_allowance_used}
+                                            value={creditStatus?.monthly_allowance_used || 0}
                                             className="h-2 mb-2"
                                         />
                                         <div className="text-xs text-gray-400">
-                                            {creditStatus.monthly_allowance_used.toFixed(1)}% of 3,000 credits used
+                                            {(creditStatus?.monthly_allowance_used || 0).toFixed(1)}% of 3,000 credits used
                                         </div>
                                     </div>
                                 )}
@@ -229,17 +234,7 @@ const CreditManagementPage = () => {
                                     <ArrowRight className="w-4 h-4 ml-auto" />
                                 </Button>
 
-                                {creditStatus.is_elite && (
-                                    <Button
-                                        onClick={() => router.push('/care-archive')}
-                                        className="w-full justify-start"
-                                        variant="outline"
-                                    >
-                                        <Settings className="w-4 h-4 mr-2" />
-                                        Care Archive
-                                        <ArrowRight className="w-4 h-4 ml-auto" />
-                                    </Button>
-                                )}
+
 
                                 <Button
                                     onClick={() => router.push('/subscription')}
@@ -251,7 +246,7 @@ const CreditManagementPage = () => {
                                     <ExternalLink className="w-4 h-4 ml-auto" />
                                 </Button>
 
-                                {creditStatus.is_elite && (
+                                {creditStatus?.is_elite && (
                                     <Button
                                         onClick={() => router.push('/subscription/manage')}
                                         className="w-full justify-start"
@@ -282,25 +277,25 @@ const CreditManagementPage = () => {
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Plan:</span>
                                     <span className="font-medium">
-                                        {creditStatus.is_elite ? 'Elite Pack' : 'Free Plan'}
+                                        {creditStatus?.is_elite ? 'Elite Pack' : 'Free Plan'}
                                     </span>
                                 </div>
 
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Total Credits Purchased:</span>
-                                    <span className="font-medium">{creditStatus.total_credits_purchased || 0}</span>
+                                    <span className="font-medium">{creditStatus?.total_credits_purchased || 0}</span>
                                 </div>
 
-                                {creditStatus.is_elite && (
+                                {creditStatus?.is_elite && (
                                     <div className="flex justify-between">
                                         <span className="text-gray-400">Next Refill:</span>
                                         <span className="font-medium text-blue-400">
-                                            {creditStatus.days_until_monthly_refill} days
+                                            {creditStatus?.days_until_monthly_refill} days
                                         </span>
                                     </div>
                                 )}
 
-                                {!creditStatus.is_elite && (
+                                {!creditStatus?.is_elite && (
                                     <div className="bg-[var(--mrwhite-primary-color)]/30 border border-[var(--mrwhite-primary-color)]/50 rounded-sm p-3">
                                         <div className="text-xs text-[var(--mrwhite-primary-color)]">
                                             Upgrade to Elite to get 3,000 monthly credits + purchase additional credits
@@ -313,7 +308,7 @@ const CreditManagementPage = () => {
                 </div>
 
                 {/* Credit Purchase Section - Only for Elite Users */}
-                {creditStatus.can_purchase_credits && (
+                {creditStatus?.can_purchase_credits && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -327,7 +322,8 @@ const CreditManagementPage = () => {
                             </h3>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {Object.entries(creditStatus.credit_packages).map(([key, pkg]: [string, any]) => {
+                                {creditStatus?.credit_packages && Object.entries(creditStatus.credit_packages).length > 0 ? 
+                                    Object.entries(creditStatus.credit_packages).map(([key, pkg]: [string, any]) => {
                                     const totalCredits = pkg.credits + pkg.bonus;
                                     const savings = pkg.bonus > 0 ? Math.round((pkg.bonus / pkg.credits) * 100) : 0;
 
@@ -363,14 +359,24 @@ const CreditManagementPage = () => {
                                             </div>
                                         </div>
                                     );
-                                })}
+                                }) : 
+                                    <div className="col-span-full text-center py-8">
+                                        <div className="text-gray-400 mb-2">No credit packages available</div>
+                                        <div className="text-sm text-gray-500">
+                                            {creditStatus?.is_elite ? 
+                                                "You have Elite access with monthly credits" : 
+                                                "Upgrade to Elite to purchase additional credits"
+                                            }
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         </Card>
                     </motion.div>
                 )}
 
                 {/* Upgrade Prompt for Free Users */}
-                {!creditStatus.is_elite && (
+                {!creditStatus?.is_elite && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -392,7 +398,7 @@ const CreditManagementPage = () => {
                                     onClick={() => router.push('/subscription')}
                                 >
                                     <Crown className="w-5 h-5 mr-2" />
-                                    Upgrade to Elite Pack - $28.95/month
+                                    Upgrade to Elite Pack - $19.95/month
                                 </Button>
                             </div>
                         </Card>
@@ -400,7 +406,7 @@ const CreditManagementPage = () => {
                 )}
 
                 {/* Low Balance Warning */}
-                {creditStatus.available_credits < 100 && creditStatus.is_elite && (
+                {(creditStatus?.available_credits || 0) < 100 && creditStatus?.is_elite && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -414,7 +420,7 @@ const CreditManagementPage = () => {
                                     <h3 className="text-lg font-semibold text-red-400">Low Credit Balance</h3>
                                     <p className="text-red-300">
                                         You're running low on credits. Purchase additional credits to continue
-                                        using all features until your next monthly refill in {creditStatus.days_until_monthly_refill} days.
+                                        using all features until your next monthly refill in {creditStatus?.days_until_monthly_refill} days.
                                     </p>
                                 </div>
                             </div>

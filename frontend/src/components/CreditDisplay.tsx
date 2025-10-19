@@ -6,76 +6,23 @@ import { Button } from '@/components/ui/button';
 import { Coins, Crown, Plus, Gift, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-interface CreditStatus {
-    credits_balance: number;
-    available_credits: number;
-    is_elite: boolean;
-    daily_free_credits_claimed: boolean;
-    can_purchase_credits: boolean;
-    plan_info: {
-        daily_free_credits: number;
-    };
-}
-
 interface CreditDisplayProps {
     variant?: 'navbar' | 'mobile';
 }
 
 export const CreditDisplay = ({ variant = 'navbar' }: CreditDisplayProps) => {
-    const { user, creditRefreshTrigger } = useAuth();
+    const { user, creditRefreshTrigger, creditStatus, forceCreditRefresh } = useAuth();
     const router = useRouter();
-    const [creditStatus, setCreditStatus] = useState<CreditStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const lastFetchTime = useRef<number>(0);
-    const FETCH_COOLDOWN = 1000; // Minimum 1 second between API calls
-
-    const fetchCreditStatus = async () => {
-        // Rate limiting: prevent excessive API calls
-        const now = Date.now();
-        if (now - lastFetchTime.current < FETCH_COOLDOWN) {
-            return;
-        }
-        lastFetchTime.current = now;
-
-        if (!user) {
-            setLoading(false);
-            return;
-        }
-
-        try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/credit-system/status`, {
-                credentials: 'include'
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data) {
-                    setCreditStatus(result.data);
-                } else {
-                    console.error('CreditDisplay: Invalid API response structure:', result);
-                    setCreditStatus(null);
-                }
-            } else {
-                const errorText = await response.text();
-                console.error('CreditDisplay: Failed to fetch credit status:', response.status, errorText);
-                setCreditStatus(null);
-            }
-        } catch (error) {
-            console.error('CreditDisplay: Error fetching credit status:', error);
-            setCreditStatus(null);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     useEffect(() => {
         if (user) {
-            fetchCreditStatus();
+            setLoading(false);
         } else {
             setLoading(false);
         }
-    }, [user, creditRefreshTrigger]); // Listen for credit refresh triggers
+    }, [user, creditStatus]);
 
     const getBalanceColor = (credits: number) => {
         if (credits < 100) return 'text-red-400';
@@ -87,9 +34,9 @@ export const CreditDisplay = ({ variant = 'navbar' }: CreditDisplayProps) => {
         try {
             // More robust API URL detection
             const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL ||
-                (typeof window !== 'undefined' && window.location.origin === 'http://localhost:3000'
-                    ? 'http://localhost:5001'
-                    : 'http://localhost:5001');
+                (typeof window !== 'undefined' && window.location.origin === process.env.NEXT_PUBLIC_FRONTEND_URL
+                    ? process.env.NEXT_PUBLIC_API_BASE_URL
+                    : process.env.NEXT_PUBLIC_API_BASE_URL);
             const response = await fetch(
                 `${apiUrl}/api/credit-system/claim-daily`,
                 {
@@ -104,7 +51,8 @@ export const CreditDisplay = ({ variant = 'navbar' }: CreditDisplayProps) => {
             if (response.ok) {
                 const result = await response.json();
                 if (result.success) {
-                    await fetchCreditStatus();
+                    // Use the centralized force refresh for immediate update
+                    await forceCreditRefresh();
 
                     // Optional: Show success toast/notification
                     if (typeof window !== 'undefined') {
@@ -157,7 +105,7 @@ export const CreditDisplay = ({ variant = 'navbar' }: CreditDisplayProps) => {
             <div className="flex items-center gap-2">
                 <Button
                     variant="ghost"
-                    onClick={fetchCreditStatus}
+                    onClick={forceCreditRefresh}
                     className="px-3 py-1 h-auto text-xs text-red-400 border border-red-700"
                     title={error}
                 >
@@ -212,7 +160,7 @@ export const CreditDisplay = ({ variant = 'navbar' }: CreditDisplayProps) => {
                         <Button
                             size="sm"
                             onClick={() => router.push('/account/credits')}
-                            className="bg-blue-600 hover:bg-blue-700 text-xs flex-1"
+                            className="bg-blue-600 hover:bg-blue-700 text-xs mx-auto w-1/2"
                         >
                             <Plus className="w-3 h-3 mr-1" />
                             Buy More

@@ -5,11 +5,23 @@ import FadeInSection from "@/components/FadeInSection";
 import ImagePop from "@/components/ImagePop";
 import ShakingIcon from "@/components/ShakingIcon";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import Image from "next/image";
 import { PiBoneFill, PiInfo } from "react-icons/pi";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 const AboutPage = () => {
+	const router = useRouter();
+	const { user } = useAuth();
+
+	// Function to handle the "See Benefits" button click
+	const handleSeeBenefitsClick = () => {
+		// Store the intended destination for after login
+		localStorage.setItem('redirectAfterLogin', '/my-hub');
+		router.push('/my-hub');
+	};
+
 	return (
 		<div className="flex flex-col gap-y-24 overflow-x-hidden">
 
@@ -17,7 +29,7 @@ const AboutPage = () => {
 			<section className="h-[280px] flex flex-col justify-center items-center w-full relative bg-[url('/assets/about-hero.webp')] bg-cover bg-center">
 				<div className="absolute inset-0 bg-black/40"></div>
 				<div className="z-20">
-					<h1 className="max-[1200px]:text-[32px] text-[40px] font-work-sans font-semibold text-center">Meet Mr White</h1>
+					<h1 className="max-[1200px]:text-[32px] text-[40px] font-work-sans font-semibold text-center">Meet Mr. White</h1>
 					<p className="max-[1200px]:text-[16px] text-[20px] font-public-sans font-light text-center">The Yoda of the Dog World Just for You</p>
 				</div>
 			</section>
@@ -299,7 +311,7 @@ const AboutPage = () => {
 						</p>
 						</div>
 
-						<Button className="w-full h-[47px] text-[20px] font-medium font-work-sans">
+						<Button className="w-1/2 h-[47px] text-[20px] font-medium font-work-sans" onClick={handleSeeBenefitsClick}>
 						<ShakingIcon icon={<PiBoneFill className="!w-6 !h-6" />} />
 							See Benefits
 						</Button>

@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Work_Sans, Public_Sans } from "next/font/google";
 import "./globals.css";
-import Image from "next/image";
-import Link from "next/link";
-import { GiChatBubble } from "react-icons/gi";
-import { Button } from "@/components/ui/button";
-import { IoChatbubble } from "react-icons/io5";
-import { TbLogin } from "react-icons/tb";
-import Navbar from "@/components/Navbar";
-import ImagePop from "@/components/ImagePop";
-import Footer from "@/components/Footer";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
+
 import { AuthProvider } from "@/context/AuthContext";
 import NextTopLoader from 'nextjs-toploader';
+import { Toaster } from 'react-hot-toast';
+import Script from 'next/script';
+import { TimezoneDetector } from '@/components/TimezoneDetector';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -67,7 +64,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3005",
+    url: process.env.NEXT_PUBLIC_FRONTEND_URL,
     title: process.env.NEXT_PUBLIC_APP_TITLE || "Mr. White - AI Dog Care Assistant",
     description: process.env.NEXT_PUBLIC_APP_DESCRIPTION || "Your AI-powered companion for comprehensive dog care advice, training tips, and personalized guidance for all dog breeds",
     siteName: "Mr. White",
@@ -99,6 +96,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        {/* Head content is managed by Next.js */}
+      </head>
       <body
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${workSans.variable} ${publicSans.variable} antialiased`}
@@ -109,11 +109,42 @@ export default function RootLayout({
           height={3}
           shadow="0 0 10px #2563eb,0 0 5px #2563eb"
         />
+        <Toaster
+          position="bottom-center"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#333',
+              color: '#fff',
+              border: '1px solid #D3B86A',
+            },
+          }}
+        />
         {/* <Navbar /> */}
         <AuthProvider>
+          <TimezoneDetector />
           {children}
         </AuthProvider>
         {/* <Footer /> */}
+        
+        {/* Initialize sound preloading */}
+        <Script id="preload-sounds">
+          {`
+            if (typeof window !== 'undefined') {
+              try {
+                // Preload sound files
+                const sounds = ['/sounds/success.mp3', '/sounds/error.mp3'];
+                sounds.forEach(src => {
+                  const audio = new Audio();
+                  audio.preload = 'auto';
+                  audio.src = src;
+                });
+              } catch (e) {
+                console.error('Error preloading sounds:', e);
+              }
+            }
+          `}
+        </Script>
       </body>
     </html>
   );

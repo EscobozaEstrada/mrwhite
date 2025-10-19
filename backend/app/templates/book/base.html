@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ book.title }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2.5cm 2.5cm 3cm 2.5cm;
+            @bottom-center {
+                content: counter(page);
+                font-size: 10pt;
+                font-family: serif;
+            }
+        }
+        
+        @page :first {
+            margin: 0;
+            @bottom-center {
+                content: normal;
+            }
+        }
+        
+        @page chapter {
+            @top-center {
+                content: string(chapter-title);
+                font-size: 9pt;
+                font-style: italic;
+            }
+        }
+        
+        /* Hide header on the first page of each chapter */
+        @page chapter:first {
+            @top-center {
+                content: normal;
+            }
+        }
+        
+        body {
+            font-family: {{ font_family }};
+            font-size: 12pt;
+            line-height: 1.5;
+            margin: 0;
+            padding: 0;
+            counter-reset: chapter;
+        }
+        
+        /* Cover Page */
+        .cover {
+            height: 100vh;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+            page-break-after: always;
+            margin: 0;
+            padding: 0;
+            background-color: {% if book.cover_image %}transparent{% else %}#f5f5f5{% endif %};
+        }
+        
+        .cover-image {
+            /* position: absolute;
+            top: 0;
+            left: 0; */
+            width: 100%;
+            /* height: 100vh; */
+            object-fit: cover;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        .cover-content {
+            position: absolute;
+            /* top: 0;
+            left: 0; */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            padding: 2em;
+            /* align-self: center; */
+            /* margin-top: 40vh; */
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            max-width: 80%;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .book-title {
+            font-size: 42pt;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        
+        .author {
+            font-size: 18pt;
+            margin-bottom: 50px;
+        }
+        
+        /* Table of Contents */
+        .toc {
+            page-break-after: always;
+            padding: 2em 0;
+        }
+        
+        .toc h1 {
+            text-align: center;
+            font-size: 24pt;
+            margin-bottom: 40px;
+            string-set: chapter-title "Table of Contents";
+        }
+
+        .toc-logo {
+            max-height: 60px;
+            /* margin-bottom: 15px; */
+            margin: 0 auto;
+        }
+        
+        .toc ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        .toc li {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: baseline;
+        }
+        
+        .toc a {
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        
+        .toc a::before {
+            content: attr(title);
+            font-weight: normal;
+        }
+        
+        .toc a::after {
+            content: target-counter(attr(href), page);
+            font-weight: normal;
+        }
+        
+        .toc .dots {
+            flex-grow: 1;
+            border-bottom: 1px dotted #999;
+            margin: 0 5px;
+            height: 1px;
+            align-self: flex-end;
+        }
+        
+        /* Chapter */
+        .chapter {
+            page: chapter;
+            page-break-before: always;
+            counter-increment: chapter;
+        }
+        
+        /* First page of each chapter should not have running header */
+        .chapter-first-page {
+            page: chapter-first;
+        }
+        
+        /* Define the chapter page with running header */
+        @page chapter {
+            @top-center {
+                content: string(chapter-title);
+                font-size: 9pt;
+                font-style: italic;
+            }
+        }
+        
+        /* Define the first page of chapter with no running header */
+        @page chapter-first {
+            @top-center {
+                content: normal;
+            }
+        }
+        
+        .chapter-header {
+            text-align: center;
+            /* margin-bottom: 3em; */
+        }
+        
+        .chapter-title {
+            font-size: 24pt;
+            margin-bottom: 0.5em;
+            position: relative;
+            display: inline-block;
+            string-set: chapter-title content();
+        }
+        
+        .chapter-title::after {
+            content: "";
+            position: absolute;
+            bottom: -10px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #333;
+        }
+        
+        .chapter-content {
+            text-align: justify;
+            hyphens: auto;
+            padding: 1em 0;
+        }
+        
+        .chapter-content p {
+            margin-bottom: 1em;
+            /* text-indent: 1.5em; */
+        }
+        
+        .chapter-content p:first-of-type {
+            text-indent: 0;
+        }
+        
+        .chapter-content p:first-of-type::first-letter {
+            /* font-size: 200%;
+            float: left;
+            line-height: 0.8;
+            margin-right: 0.1em; */
+        }
+        
+        /* Chapter Images Styles - Interspersed in content */
+        .chapter-images {
+            margin: 2em 0;
+        }
+        
+        .image-container {
+            margin: 2em auto;
+            padding: 1em 0;
+            page-break-inside: avoid;
+            text-align: center;
+            max-width: 90%;
+        }
+        
+        .chapter-image {
+            max-width: 100%;
+            max-height: 400px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .image-caption {
+            font-size: 10pt;
+            font-style: italic;
+            text-align: center;
+            margin-top: 0.8em;
+            color: #555;
+            line-height: 1.4;
+        }
+        
+        /* Photo Gallery Layout (Maximum photos - Historical/Memorial) */
+        .photo-gallery .chapter-image {
+            max-height: 500px;
+            object-fit: contain;
+        }
+        
+        .photo-gallery .image-container {
+            margin: 1.5em 0;
+        }
+        
+        /* Photo Integrated High Layout (Family & Friends) */
+        .photo-integrated-high .chapter-image {
+            max-height: 400px;
+            object-fit: contain;
+        }
+        
+        /* Photo Integrated Layout (Relationship/Training) */
+        .photo-integrated .chapter-image {
+            max-height: 350px;
+            object-fit: contain;
+        }
+        
+        /* Photo Minimal Layout (Medical) */
+        .photo-minimal .chapter-image {
+            max-height: 250px;
+            max-width: 70%;
+            object-fit: contain;
+        }
+        
+        .photo-minimal .image-caption {
+            font-size: 9pt;
+        }
+    </style>
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html> 
