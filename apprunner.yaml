@@ -17,8 +17,8 @@ run:
     - pip3 install --upgrade pip
     - pip3 install -r backend/requirements.txt
   
-  # Change to backend directory and start the application
-  command: "cd backend && gunicorn --config gunicorn.conf.py wsgi:application"
+  # Start the application from the backend directory
+  command: gunicorn --chdir backend --config gunicorn.conf.py wsgi:application
   
   # Network configuration
   network:
