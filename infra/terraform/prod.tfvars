@@ -10,8 +10,8 @@ organization   = "monetizespirit"
 
 # === Repository URLs ===
 # Monorepo configuration - both backend and frontend in same repo
-backend_repository_url  = "https://github.com/nodeexcel/Mr-White-Project"
-frontend_repository_url = "https://github.com/nodeexcel/Mr-White-Project"
+backend_repository_url  = "https://github.com/EscobozaEstrada/mrwhite"
+frontend_repository_url = "https://github.com/EscobozaEstrada/mrwhite"
 backend_branch         = "main"
 frontend_branch        = "main"
 
