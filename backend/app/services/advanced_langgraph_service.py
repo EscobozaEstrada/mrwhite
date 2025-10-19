@@ -4264,7 +4264,7 @@ class AdvancedLangGraphService:
                       for doc in user_context.get('documents', [])])}
         
         Document Contents Preview:
-        {chr(10).join([f"Document: {doc.get('filename', '')}\nContent: {doc.get('content', '')[:200]}..." 
+        {chr(10).join([f"Document: {doc.get('filename', '')}{chr(10)}Content: {doc.get('content', '')[:200]}..." 
                       for doc in user_context.get('documents', [])[:3]])}
         
         As a document specialist:

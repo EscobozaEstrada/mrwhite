@@ -1,0 +1,37 @@
+{
+  "name": "Mr White Dev (Python 3.12)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "PYTHON_VERSION": "3.11"
+    }
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "updateRemoteUserUID": true,
+  "features": {},
+  "containerEnv": {
+    "ENVIRONMENT": "prod",
+    "USE_SSM_CONFIG": "True",
+    "ORGANIZATION": "monetizespirit",
+    "PROJECT_NAME": "mrwhite"
+  },
+  "forwardPorts": [5001],
+  "portsAttributes": {
+    "5001": { "label": "Backend (Gunicorn)" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3",
+        "python.terminal.activateEnvironment": false
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  }
+}

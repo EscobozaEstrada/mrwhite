@@ -174,6 +174,27 @@ module "networking_egress" {
   tags = local.common_tags
 }
 
+# === VPC Endpoints for Private Subnet AWS Service Access ===
+# Required for App Runner in private VPC to access AWS services without NAT Gateway
+module "vpc_endpoints" {
+  source = "./modules/vpc_endpoints"
+  
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  vpc_id             = module.vpc.vpc_id
+  vpc_cidr           = var.vpc_cidr
+  private_subnet_ids = module.vpc.private_subnet_ids
+  route_table_ids    = module.vpc.private_route_table_ids
+  
+  # SSM and Secrets Manager are essential for App Runner
+  # S3 gateway endpoint is already created by networking_egress module
+  enable_ecr_endpoints        = false  # Only needed for custom container images
+  enable_cloudwatch_endpoint  = var.enable_monitoring
+  
+  tags = local.common_tags
+}
+
 # === GitHub Connection for App Runner ===
 module "github_connection" {
   source = "./modules/github_connection"

@@ -138,9 +138,29 @@ resource "aws_security_group_rule" "app_runner_egress_rds" {
   security_group_id        = aws_security_group.app_runner.id
 }
 
-# CRITICAL: No 0.0.0.0/0 egress rule here
-# App Runner's VPC connector uses default public egress for external traffic
-# when no NAT Gateway is present in private subnets
+# Allow App Runner to make HTTPS requests to AWS services (SSM, Secrets Manager, S3, etc.)
+resource "aws_security_group_rule" "app_runner_egress_https" {
+  type              = "egress"
+  description       = "Allow App Runner to make HTTPS requests to AWS services"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.app_runner.id
+}
+
+# Allow App Runner to make HTTP requests (for external APIs if needed)
+resource "aws_security_group_rule" "app_runner_egress_http" {
+  type              = "egress"
+  description       = "Allow App Runner to make HTTP requests"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.app_runner.id
+}
+
+# CRITICAL: No full 0.0.0.0/0 egress rule - only specific ports for security
 
 # RDS Security Group
 resource "aws_security_group" "rds" {
