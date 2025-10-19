@@ -1,4 +1,4 @@
-    `"""
+"""
 SSM-aware Flask Configuration
 
 This module provides Flask configuration that can read from AWS SSM Parameter Store
@@ -30,7 +30,8 @@ class SSMConfigManager:
         """Lazy initialization of SSM client"""
         if self._ssm_client is None:
             try:
-                self._ssm_client = boto3.client('ssm')
+                region = os.getenv('AWS_REGION', 'us-east-1')
+                self._ssm_client = boto3.client('ssm', region_name=region)
             except NoCredentialsError:
                 logger.warning("⚠️  AWS credentials not found, SSM parameters will not be available")
                 self._ssm_client = False  # Mark as unavailable

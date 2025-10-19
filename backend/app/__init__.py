@@ -29,7 +29,14 @@ def create_app(config_name=None):
     if use_ssm_config:
         # Use SSM-aware configuration
         try:
-            from .tools.ssm_config import get_config
+            # Import from tools at backend level (not app.tools)
+            import sys
+            from pathlib import Path
+            backend_path = Path(__file__).parent.parent
+            if str(backend_path) not in sys.path:
+                sys.path.insert(0, str(backend_path))
+            
+            from tools.ssm_config import get_config
             config_obj = get_config(environment)
             app.config.from_object(config_obj)
             app.logger.info(f"✅ Using SSM configuration for environment: {environment}")
