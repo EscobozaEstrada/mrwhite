@@ -1,20 +1,21 @@
 version: 1.0
-runtime: python3
+runtime: python311
 
 # Monorepo configuration - only watch backend/ directory
 # App Runner will only redeploy when files in backend/ change
 build:
   commands:
     pre-build:
-      # Change to backend directory
-      - cd backend
-      - echo "📦 Installing Python dependencies..."
-      - pip install --upgrade pip
-      - pip install -r requirements.txt
+      # No dependency installation here for Python 3.11 revised build
+      - echo "Skipping pip install in build phase (Python 3.11 revised build)."
 
 run:
   # Runtime configuration
   runtime-version: 3.11
+  pre-run:
+    - echo "📦 Installing Python dependencies at runtime (Python 3.11 revised build)..."
+    - pip3 install --upgrade pip
+    - pip3 install -r backend/requirements.txt
   
   # Change to backend directory and start the application
   command: "cd backend && gunicorn --config gunicorn.conf.py wsgi:application"
