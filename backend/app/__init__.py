@@ -29,14 +29,8 @@ def create_app(config_name=None):
     if use_ssm_config:
         # Use SSM-aware configuration
         try:
-            # Import from tools at backend level (not app.tools)
-            import sys
-            from pathlib import Path
-            backend_path = Path(__file__).parent.parent
-            if str(backend_path) not in sys.path:
-                sys.path.insert(0, str(backend_path))
-            
-            from tools.ssm_config import get_config
+            # Import from the new location in app/utils
+            from .utils.ssm_config import get_config
             config_obj = get_config(environment)
             app.config.from_object(config_obj)
             app.logger.info(f"✅ Using SSM configuration for environment: {environment}")
@@ -175,11 +169,10 @@ def create_app(config_name=None):
         app.logger.info("📝 Configuration loaded from environment variables")
     
     # Register blueprints
-    from .routes import auth_bp, chatbot_bp, conversation_bp, contact_bp, enhanced_chat_bp, care_archive_bp, payment_bp
+    from .routes import auth_bp, chatbot_bp, conversation_bp, contact_bp, care_archive_bp, payment_bp
     from .routes.subscription import subscription_bp
     from .routes.usage import usage_bp
     from .routes.health_intelligence_routes import health_intelligence_bp
-    from .routes.enhanced_health import enhanced_health_bp
     from .routes.health_routes import health_bp
     from .routes.credit_system import credit_system_bp
     from .routes.enhanced_reminder_routes import enhanced_reminder_bp
@@ -190,13 +183,11 @@ def create_app(config_name=None):
     app.register_blueprint(chatbot_bp, url_prefix='/api')
     app.register_blueprint(conversation_bp, url_prefix='/api')
     app.register_blueprint(contact_bp, url_prefix='/api/contact')
-    app.register_blueprint(enhanced_chat_bp, url_prefix='/api')
     app.register_blueprint(care_archive_bp, url_prefix='/api/care-archive')
     app.register_blueprint(payment_bp, url_prefix='/api/payment')
     app.register_blueprint(subscription_bp, url_prefix='/api/subscription')
     app.register_blueprint(usage_bp, url_prefix='/api/usage')
     app.register_blueprint(health_intelligence_bp)  # Already has /api/health-intelligence prefix
-    app.register_blueprint(enhanced_health_bp)  # Already has /api/enhanced-health prefix
     app.register_blueprint(health_bp)  # Already has /api/health prefix
     app.register_blueprint(credit_system_bp, url_prefix='/api/credit-system')
     app.register_blueprint(enhanced_reminder_bp)  # Already has /api/reminders prefix
