@@ -14,7 +14,7 @@ build:
 
 run:
   # Runtime configuration
-  runtime-version: "3.11"
+  runtime-version: 3.11
   
   # Change to backend directory and start the application
   command: "cd backend && gunicorn --config gunicorn.conf.py wsgi:application"
