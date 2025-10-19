@@ -1,0 +1,51 @@
+version: 1.0
+runtime: python3
+
+# Monorepo configuration - only watch backend/ directory
+# App Runner will only redeploy when files in backend/ change
+build:
+  commands:
+    pre-build:
+      # Change to backend directory
+      - cd backend
+      - echo "📦 Installing Python dependencies..."
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      
+env:
+  # Environment detection
+  - name: ENVIRONMENT
+    value: "prod"
+  
+  # Use SSM Parameter Store for configuration
+  - name: USE_SSM_CONFIG
+    value: "True"
+    
+  # Organization and project settings
+  - name: ORGANIZATION
+    value: "monetizespirit"
+  
+  - name: PROJECT_NAME
+    value: "mrwhite"
+
+run:
+  # Runtime configuration
+  runtime-version: "3.11"
+  
+  # Change to backend directory and start the application
+  command: "cd backend && gunicorn --config gunicorn.conf.py wsgi:application"
+  
+  # Network configuration
+  network:
+    port: 5001
+    env: FLASK_PORT
+  
+  # Environment variables from SSM Parameter Store
+  # These are referenced but actual values come from SSM via Terraform
+  env:
+    # Database (managed by AWS RDS, connection string from Secrets Manager)
+    - name: DATABASE_URL
+      value: "{{resolve:secretsmanager:DATABASE_SECRET_ARN}}"
+    
+    # Application will pull other secrets from SSM Parameter Store automatically
+    # when USE_SSM_CONFIG=True

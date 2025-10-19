@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+logs/*
+# Virtual environment
+venv/
+ENV/
+
+# Logs
+*.log
+server.log
+chat_handler.log
+conversation_memory.log
+file_processor.log
+dog_content_generator.log
+embedding_log.txt
+image_processor.log
+
+# Uploads
+uploads/*
+app/uploads/*
+!uploads/.gitkeep
+uploads/*
+app/uploads/*
+.env
+.venv
+myenv/
+nohup.out
+transcripts/
+datasets/
+.DS_Store
+media/
+media_uploader.log
+service-account-key.json

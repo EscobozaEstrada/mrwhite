@@ -1,0 +1,48 @@
+# dev.tfvars.example
+# Example Terraform variables file for development environment
+# Copy this to dev.tfvars and update the values
+
+# === Core Configuration ===
+aws_region     = "us-east-1"
+project_name   = "mrwhite"
+environment    = "dev"
+organization   = "myorg"
+
+# === Repository URLs (UPDATE THESE) ===
+backend_repository_url  = "https://github.com/your-org/your-backend-repo.git"
+frontend_repository_url = "https://github.com/your-org/your-frontend-repo.git"
+
+# === Domain Configuration (UPDATE THIS) ===
+custom_domain_name    = "yourdomain.com"  # Change to your actual domain
+app_subdomain_name    = "app"              # Creates app.yourdomain.com
+api_subdomain_name    = "api"              # Creates api.yourdomain.com
+
+# === Database Configuration ===
+db_instance_class        = "db.t3.micro"   # Small instance for dev
+db_allocated_storage     = 20               # 20 GB for dev
+db_max_allocated_storage = 50               # Auto-scale up to 50 GB
+
+# === App Runner Configuration ===
+app_runner_cpu    = "0.25"  # 0.25 vCPU for dev
+app_runner_memory = "512"   # 512 MB for dev
+app_runner_min_size = 1     # 1 instance minimum
+app_runner_max_size = 2     # 2 instances maximum
+
+# === Feature Flags ===
+# Note: S3 Gateway VPC endpoint is always enabled for cost optimization
+# NAT Gateway is disabled - App Runner uses default public egress (cost-free)
+enable_bastion_host     = false  # Not needed in dev
+enable_monitoring       = true   # Keep monitoring enabled
+enable_backup           = false  # Disable backups in dev
+
+# === SECRETS MANAGEMENT ===
+# All sensitive secrets (API keys, passwords, etc.) are stored in AWS SSM Parameter Store
+# and uploaded using the upload_secrets_to_ssm.py script in backend/tools/
+#
+# To upload secrets:
+#   cd backend/tools
+#   python upload_secrets_to_ssm.py --env dev
+#
+# Secrets are retrieved at runtime by the application, not through Terraform.
+# Database passwords are automatically generated and managed by AWS RDS.
+# This ensures ZERO secrets in Terraform state for maximum security.
