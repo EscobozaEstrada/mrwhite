@@ -45,6 +45,10 @@ data "aws_ssm_parameter" "github_token" {
   with_decryption = true
 }
 
+# === Frontend Environment Variables ===
+# Amplify will fetch SSM parameters directly during build via AWS CLI
+# This avoids storing secrets in Terraform state
+
 # === VPC and Networking ===
 module "vpc" {
   source = "./modules/vpc"
@@ -326,72 +330,15 @@ module "amplify_hosting" {
   # Domain configuration is handled manually in the AWS console
   
   # Build configuration
+  # Note: NEXT_PUBLIC_ environment variables are fetched directly from SSM
+  # during the Amplify build via AWS CLI in amplify.yml
+  # This avoids storing secrets in Terraform state
   build_environment_variables = {
     # --- Dynamically Set ---
     NEXT_PUBLIC_API_BASE_URL = module.app_runner.app_runner_service_url,
     NEXT_PUBLIC_APP_NAME     = var.project_name,
     NEXT_PUBLIC_ENVIRONMENT  = var.environment,
     NEXT_PUBLIC_BUILD_ENV    = var.environment,
-
-    # --- Resolved from SSM Parameter Store ---
-    # API Config
-    NEXT_PUBLIC_FASTAPI_BASE_URL = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/fastapi_base_url}}",
-    NEXT_PUBLIC_FLASK_BASE_URL   = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/flask_base_url}}",
-    NEXT_PUBLIC_API_VERSION      = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/api_version}}",
-
-    # Frontend Config
-    NEXT_PUBLIC_FRONTEND_URL = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/frontend_url}}",
-
-    # Auth Config
-    NEXT_PUBLIC_AUTH_COOKIE_NAME = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/auth_cookie_name}}",
-
-    # App Metadata
-    NEXT_PUBLIC_APP_DESCRIPTION = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/app_description}}",
-    NEXT_PUBLIC_APP_TAGLINE     = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/app_tagline}}",
-    NEXT_PUBLIC_APP_TITLE       = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/app_title}}",
-
-    # File Upload Config
-    NEXT_PUBLIC_MAX_FILE_SIZE        = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/max_file_size}}",
-    NEXT_PUBLIC_ALLOWED_FILE_TYPES   = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/allowed_file_types}}",
-    NEXT_PUBLIC_ALLOWED_IMAGE_TYPES  = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/allowed_image_types}}",
-    NEXT_PUBLIC_UPLOAD_ENDPOINT      = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/upload_endpoint}}",
-
-    # UI Config
-    NEXT_PUBLIC_DEFAULT_CONVERSATION_TITLE = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/default_conversation_title}}",
-    NEXT_PUBLIC_CHAT_ENDPOINT              = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/chat_endpoint}}",
-    NEXT_PUBLIC_CONVERSATIONS_ENDPOINT     = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/conversations_endpoint}}",
-    NEXT_PUBLIC_BOOKMARKS_ENDPOINT         = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/bookmarks_endpoint}}",
-    NEXT_PUBLIC_MESSAGES_ENDPOINT          = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/messages_endpoint}}",
-
-    # Route Config
-    NEXT_PUBLIC_LOGIN_ROUTE         = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/login_route}}",
-    NEXT_PUBLIC_SIGNUP_ROUTE        = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/signup_route}}",
-    NEXT_PUBLIC_DASHBOARD_ROUTE     = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/dashboard_route}}",
-    NEXT_PUBLIC_TALK_ROUTE          = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/talk_route}}",
-    NEXT_PUBLIC_ABOUT_ROUTE         = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/about_route}}",
-    NEXT_PUBLIC_CONTACT_ROUTE       = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/contact_route}}",
-    NEXT_PUBLIC_SUBSCRIPTION_ROUTE  = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/subscription_route}}",
-
-    # Dev Config
-    NEXT_PUBLIC_DEBUG = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/debug}}",
-
-    # Payment Config
-    NEXT_PUBLIC_STRIPE_PUBLIC_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/stripe_public_key}}",
-
-    # Firebase Config
-    NEXT_PUBLIC_FIREBASE_API_KEY               = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_api_key}}",
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN           = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_auth_domain}}",
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID            = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_project_id}}",
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET        = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_storage_bucket}}",
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_messaging_sender_id}}",
-    NEXT_PUBLIC_FIREBASE_APP_ID                = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_app_id}}",
-
-    # Push Notifications
-    NEXT_PUBLIC_VAPID_PUBLIC_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/vapid_public_key}}",
-
-    # Text-to-Speech
-    NEXT_PUBLIC_ELEVEN_LABS_API_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/eleven_labs_api_key}}",
-    NEXT_PUBLIC_MR_WHITE_VOICE_ID   = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/mr_white_voice_id}}",
   }
   
   # Monorepo configuration - only build when frontend/ directory changes
