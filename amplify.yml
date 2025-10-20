@@ -1,9 +1,5 @@
 version: 1
 # Amplify build specification for frontend monorepo
-# This file tells Amplify to only build when frontend/ directory changes
-
-# Only trigger builds when files in frontend/ directory are modified
-# This prevents backend changes from triggering frontend rebuilds
 applications:
   - appRoot: frontend
     frontend:
@@ -18,7 +14,7 @@ applications:
             - npm run build
             - echo "✅ Build complete"
       artifacts:
-        baseDirectory: /
+        baseDirectory: .next
         files:
           - '**/*'
       cache:
