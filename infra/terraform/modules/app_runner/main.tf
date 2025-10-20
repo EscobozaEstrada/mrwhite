@@ -118,6 +118,15 @@ resource "aws_apprunner_service" "main" {
     Name = var.service_name
   })
 
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to code_configuration_values to prevent errors on update
+      # when configuration_source is REPOSITORY. Secrets and env vars are set
+      # on creation and managed outside of Terraform updates thereafter.
+      source_configuration[0].code_repository[0].code_configuration[0].code_configuration_values,
+    ]
+  }
+
   depends_on = [
     aws_apprunner_vpc_connector.main,
     aws_apprunner_auto_scaling_configuration_version.main
