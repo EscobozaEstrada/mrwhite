@@ -123,8 +123,8 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "private_subnet_ids" {
-  description = "List of private subnet IDs"
+variable "subnet_ids" {
+  description = "List of subnet IDs for the VPC connector (can be public or private)"
   type        = list(string)
 }
 
@@ -316,7 +316,7 @@ variable "tags" {
 }
 
 variable "port" {
-  description = "Port on which the application listens"
-  type        = string
-  default     = "8000"
+  description = "Port that the application listens on"
+  type        = number
+  default     = 8080
 }

@@ -41,6 +41,12 @@ variable "azs" {
   type        = list(string)
 }
 
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway for outbound internet access from private subnets"
+  type        = bool
+  default     = false
+}
+
 # NAT Gateway removed - using App Runner default public egress for cost optimization
 
 variable "enable_vpn_gateway" {

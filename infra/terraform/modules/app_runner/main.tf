@@ -11,7 +11,7 @@ locals {
 # === VPC Connector ===
 resource "aws_apprunner_vpc_connector" "main" {
   vpc_connector_name = "${local.name_prefix}-vpc-connector"
-  subnets           = var.private_subnet_ids
+  subnets           = var.subnet_ids
   security_groups   = [var.app_runner_sg_id]
 
   tags = merge(var.tags, {

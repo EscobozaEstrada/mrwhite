@@ -55,6 +55,27 @@ resource "aws_subnet" "private" {
   })
 }
 
+# === NAT Gateway ===
+resource "aws_eip" "nat" {
+  count = var.enable_nat_gateway ? 1 : 0
+  domain   = "vpc"
+  tags = merge(var.tags, {
+    Name = "${local.name_prefix}-nat-eip"
+  })
+}
+
+resource "aws_nat_gateway" "main" {
+  count         = var.enable_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = merge(var.tags, {
+    Name = "${local.name_prefix}-nat-gateway"
+  })
+
+  depends_on = [aws_internet_gateway.main]
+}
+
 # === Route Tables ===
 # Public Route Table
 resource "aws_route_table" "public" {
@@ -72,11 +93,14 @@ resource "aws_route_table" "public" {
 
 # Private Route Tables (No internet access - App Runner handles external traffic)
 resource "aws_route_table" "private" {
-  count = length(var.private_subnet_cidrs)
-
+  count  = length(var.private_subnet_cidrs)
   vpc_id = aws_vpc.main.id
 
-  # No default route to internet - S3 Gateway Endpoint will be added by networking_egress module
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = var.enable_nat_gateway ? aws_nat_gateway.main[0].id : null
+  }
+
   # App Runner's VPC connector will use default public egress for external traffic
 
   tags = merge(var.tags, {

@@ -16,9 +16,9 @@ backend_branch         = "main"
 frontend_branch        = "main"
 
 # === Domain Configuration (UPDATE THIS) ===
-custom_domain_name    = "sonoradigitalnetworks.com"   # Your actual production domain
-app_subdomain_name    = "mrwhite"                     # Creates app.yourdomain.com
-api_subdomain_name    = "mrwhite-api"                         # Creates api.yourdomain.com
+custom_domain_name    = "mrwhiteaidogbuddy.com"   # Your actual production domain
+app_subdomain_name    = "app"                     # Creates app.yourdomain.com
+api_subdomain_name    = "api"                         # Creates api.yourdomain.com
 
 # === Database Configuration (Production Settings) ===
 db_instance_class        = "db.t3.micro"   # Cost-optimized micro instance

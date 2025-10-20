@@ -1,54 +1,16 @@
 version: 1.0
-runtime: python311
+# runtime: python311 # We are switching to a Dockerfile deployment
 
-# Monorepo configuration - only watch backend/ directory
-# App Runner will only redeploy when files in backend/ change
 build:
+  image: python:3.11-slim # Specify the base image for the build environment
   commands:
-    pre-build:
-      # No dependency installation here for Python 3.11 revised build
-      - echo "Skipping pip install in build phase (Python 3.11 revised build)."
+    build:
+      - echo "Building Docker image..."
+      - docker build -t mrwhite-backend .
 
 run:
-  # Runtime configuration
-  runtime-version: 3.11
-  pre-run:
-    - echo "📦 Installing Python dependencies at runtime (Python 3.11 revised build)..."
-    - pip3 install --upgrade pip
-    - pip3 install -r backend/requirements.txt
-  
-  # Start the application from the backend directory
-  command: python3 -m gunicorn --chdir backend --bind 0.0.0.0:5001 --workers 4 --timeout 30 --preload wsgi:application
-  
-  # Network configuration
+  command: gunicorn --bind 0.0.0.0:5001 wsgi:application
   network:
     port: 5001
   
-  # Environment variables from SSM Parameter Store
-  # These are referenced but actual values come from SSM via Terraform
-  env:
-    # Environment detection
-    - name: ENVIRONMENT
-      value: "prod"
-
-    # Use SSM Parameter Store for configuration
-    - name: USE_SSM_CONFIG
-      value: "True"
-
-    # AWS Region for SSM and other AWS services
-    - name: AWS_REGION
-      value: "us-east-1"
-
-    # Organization and project settings
-    - name: ORGANIZATION
-      value: "monetizespirit"
-
-    - name: PROJECT_NAME
-      value: "mrwhite"
-
-    # Database (managed by AWS RDS, connection string from Secrets Manager)
-    # Value is resolved at runtime by application using SSM + Secrets Manager
-    # Keep placeholder or omit; application constructs from SSM when USE_SSM_CONFIG=True
-    
-    # Application will pull other secrets from SSM Parameter Store automatically
-    # when USE_SSM_CONFIG=True
+  # Environment variables are now passed directly from Terraform to the container

@@ -104,12 +104,6 @@ output "ssm_parameter_path" {
   value       = "/${var.organization}/${var.project_name}/${var.environment}/"
 }
 
-# === DNS Configuration ===
-output "acm_certificate_arn" {
-  description = "ARN of the ACM certificate for custom domain"
-  value       = try(aws_acm_certificate.main_cert[0].arn, "Not created")
-}
-
 output "amplify_cname_validation_records" {
   description = "CNAME records to add to your DNS provider for custom domain validation"
   value       = try(module.amplify_hosting.amplify_domain_association_cname_records, [])

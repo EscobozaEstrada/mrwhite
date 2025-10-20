@@ -10,11 +10,7 @@ resource "aws_amplify_app" "main" {
   name       = var.app_name
   repository = var.repository_url
   platform   = var.platform
-
-  # Build settings - use custom build spec for monorepo
-  # The amplify.yml in the repository root will be used automatically
-  # It specifies appRoot: frontend to only watch frontend/ directory
-  build_spec = var.build_spec != "" ? var.build_spec : null  # Use repository's amplify.yml
+  iam_service_role_arn = var.create_service_role ? aws_iam_role.amplify_service[0].arn : null
 
   # Environment variables for build
   environment_variables = merge(

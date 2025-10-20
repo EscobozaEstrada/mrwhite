@@ -119,9 +119,8 @@ variable "branch_environment_variables" {
 
 # Authentication
 variable "github_access_token" {
-  description = "GitHub personal access token"
+  description = "GitHub personal access token for Amplify to access the repository"
   type        = string
-  default     = null
   sensitive   = true
 }
 

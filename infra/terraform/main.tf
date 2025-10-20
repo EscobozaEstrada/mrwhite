@@ -40,6 +40,11 @@ resource "random_id" "resource_suffix" {
   byte_length = 4
 }
 
+data "aws_ssm_parameter" "github_token" {
+  name            = "/monetizespirit/mrwhite/prod/github_token"
+  with_decryption = true
+}
+
 # === VPC and Networking ===
 module "vpc" {
   source = "./modules/vpc"
@@ -54,7 +59,8 @@ module "vpc" {
   private_subnet_cidrs = var.private_subnet_cidrs
   azs                  = local.availability_zones
   
-  # Cost-optimized networking: No NAT Gateway, App Runner uses default public egress
+  # Enable NAT Gateway for App Runner's outbound traffic from private subnets
+  enable_nat_gateway   = true
   enable_vpn_gateway   = false
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -161,40 +167,6 @@ module "rds" {
   tags = local.common_tags
 }
 
-# === S3 Gateway VPC Endpoint (Cost-Optimized) ===
-module "networking_egress" {
-  source = "./modules/networking_egress"
-  
-  aws_region              = var.aws_region
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.vpc.vpc_id
-  private_route_table_ids = module.vpc.private_route_table_ids
-  
-  tags = local.common_tags
-}
-
-# === VPC Endpoints for Private Subnet AWS Service Access ===
-# Required for App Runner in private VPC to access AWS services without NAT Gateway
-module "vpc_endpoints" {
-  source = "./modules/vpc_endpoints"
-  
-  project_name       = var.project_name
-  environment        = var.environment
-  aws_region         = var.aws_region
-  vpc_id             = module.vpc.vpc_id
-  vpc_cidr           = var.vpc_cidr
-  private_subnet_ids = module.vpc.private_subnet_ids
-  route_table_ids    = module.vpc.private_route_table_ids
-  
-  # SSM and Secrets Manager are essential for App Runner
-  # S3 gateway endpoint is already created by networking_egress module
-  enable_ecr_endpoints        = false  # Only needed for custom container images
-  enable_cloudwatch_endpoint  = var.enable_monitoring
-  
-  tags = local.common_tags
-}
-
 # === GitHub Connection for App Runner ===
 module "github_connection" {
   source = "./modules/github_connection"
@@ -233,7 +205,8 @@ module "app_runner" {
 
   # Network configuration
   vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
+  # NOTE: Using private subnets; outbound traffic goes through NAT Gateway
+  subnet_ids         = module.vpc.private_subnet_ids
   app_runner_sg_id   = module.vpc.app_runner_sg_id
   
   # IAM roles
@@ -255,8 +228,8 @@ module "app_runner" {
     S3_BUCKET_NAME = module.s3_storage.s3_bucket_id
     AWS_S3_REGION  = var.aws_region
     
-    # Frontend URL for CORS
-    FRONTEND_URL = var.custom_domain_name != "yourdomain.com" ? "https://${var.app_subdomain_name}.${var.custom_domain_name}" : "http://localhost:3000"
+    # Frontend URL for CORS - now constructed with the api_subdomain_name
+    FRONTEND_URL = "https://${var.app_subdomain_name}.${var.custom_domain_name}"
   }
   
   # Sensitive environment variables from SSM Parameter Store
@@ -335,25 +308,6 @@ module "app_runner" {
   tags = local.common_tags
 }
 
-# === ACM Certificate for Custom Domain ===
-resource "aws_acm_certificate" "main_cert" {
-  count = var.custom_domain_name != "yourdomain.com" ? 1 : 0
-  
-  domain_name       = var.custom_domain_name
-  subject_alternative_names = [
-    "*.${var.custom_domain_name}"
-  ]
-  validation_method = "DNS"
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-certificate"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # === Amplify Hosting Frontend Service ===
 module "amplify_hosting" {
   source = "./modules/amplify_hosting"
@@ -367,30 +321,77 @@ module "amplify_hosting" {
   app_name       = "${local.name_prefix}-frontend"
   repository_url = var.frontend_repository_url
   branch_name    = var.frontend_branch
+  github_access_token = data.aws_ssm_parameter.github_token.value
   
-  # Domain configuration
-  custom_domain_name = var.custom_domain_name != "yourdomain.com" ? var.custom_domain_name : null
-  subdomain_name     = var.app_subdomain_name
-  acm_certificate_arn = var.custom_domain_name != "yourdomain.com" ? aws_acm_certificate.main_cert[0].arn : null
+  # Domain configuration is handled manually in the AWS console
   
   # Build configuration
   build_environment_variables = {
-    # Backend API URL
-    NEXT_PUBLIC_API_BASE_URL = module.app_runner.app_runner_service_url
-    
-    # Application configuration
-    NEXT_PUBLIC_APP_NAME        = var.project_name
-    NEXT_PUBLIC_ENVIRONMENT     = var.environment
-    
-    # Public API keys (non-sensitive) - Retrieved from SSM Parameter Store
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/stripe_publishable_key}}"
-    
-    # Firebase configuration (public) - Retrieved from SSM Parameter Store
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_project_id}}"
-    NEXT_PUBLIC_FIREBASE_API_KEY    = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_api_key}}"
-    
-    # Build optimization
-    NEXT_PUBLIC_BUILD_ENV = var.environment
+    # --- Dynamically Set ---
+    NEXT_PUBLIC_API_BASE_URL = module.app_runner.app_runner_service_url,
+    NEXT_PUBLIC_APP_NAME     = var.project_name,
+    NEXT_PUBLIC_ENVIRONMENT  = var.environment,
+    NEXT_PUBLIC_BUILD_ENV    = var.environment,
+
+    # --- Resolved from SSM Parameter Store ---
+    # API Config
+    NEXT_PUBLIC_FASTAPI_BASE_URL = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/fastapi_base_url}}",
+    NEXT_PUBLIC_FLASK_BASE_URL   = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/flask_base_url}}",
+    NEXT_PUBLIC_API_VERSION      = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/api_version}}",
+
+    # Frontend Config
+    NEXT_PUBLIC_FRONTEND_URL = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/frontend_url}}",
+
+    # Auth Config
+    NEXT_PUBLIC_AUTH_COOKIE_NAME = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/auth_cookie_name}}",
+
+    # App Metadata
+    NEXT_PUBLIC_APP_DESCRIPTION = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/app_description}}",
+    NEXT_PUBLIC_APP_TAGLINE     = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/app_tagline}}",
+    NEXT_PUBLIC_APP_TITLE       = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/app_title}}",
+
+    # File Upload Config
+    NEXT_PUBLIC_MAX_FILE_SIZE        = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/max_file_size}}",
+    NEXT_PUBLIC_ALLOWED_FILE_TYPES   = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/allowed_file_types}}",
+    NEXT_PUBLIC_ALLOWED_IMAGE_TYPES  = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/allowed_image_types}}",
+    NEXT_PUBLIC_UPLOAD_ENDPOINT      = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/upload_endpoint}}",
+
+    # UI Config
+    NEXT_PUBLIC_DEFAULT_CONVERSATION_TITLE = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/default_conversation_title}}",
+    NEXT_PUBLIC_CHAT_ENDPOINT              = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/chat_endpoint}}",
+    NEXT_PUBLIC_CONVERSATIONS_ENDPOINT     = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/conversations_endpoint}}",
+    NEXT_PUBLIC_BOOKMARKS_ENDPOINT         = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/bookmarks_endpoint}}",
+    NEXT_PUBLIC_MESSAGES_ENDPOINT          = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/messages_endpoint}}",
+
+    # Route Config
+    NEXT_PUBLIC_LOGIN_ROUTE         = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/login_route}}",
+    NEXT_PUBLIC_SIGNUP_ROUTE        = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/signup_route}}",
+    NEXT_PUBLIC_DASHBOARD_ROUTE     = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/dashboard_route}}",
+    NEXT_PUBLIC_TALK_ROUTE          = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/talk_route}}",
+    NEXT_PUBLIC_ABOUT_ROUTE         = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/about_route}}",
+    NEXT_PUBLIC_CONTACT_ROUTE       = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/contact_route}}",
+    NEXT_PUBLIC_SUBSCRIPTION_ROUTE  = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/subscription_route}}",
+
+    # Dev Config
+    NEXT_PUBLIC_DEBUG = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/debug}}",
+
+    # Payment Config
+    NEXT_PUBLIC_STRIPE_PUBLIC_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/stripe_public_key}}",
+
+    # Firebase Config
+    NEXT_PUBLIC_FIREBASE_API_KEY               = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_api_key}}",
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN           = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_auth_domain}}",
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID            = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_project_id}}",
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET        = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_storage_bucket}}",
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_messaging_sender_id}}",
+    NEXT_PUBLIC_FIREBASE_APP_ID                = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/firebase_app_id}}",
+
+    # Push Notifications
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/vapid_public_key}}",
+
+    # Text-to-Speech
+    NEXT_PUBLIC_ELEVEN_LABS_API_KEY = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/eleven_labs_api_key}}",
+    NEXT_PUBLIC_MR_WHITE_VOICE_ID   = "{{resolve:ssm:/${var.organization}/${var.project_name}/${var.environment}/mr_white_voice_id}}",
   }
   
   # Monorepo configuration - only build when frontend/ directory changes
@@ -399,6 +400,9 @@ module "amplify_hosting" {
   # Framework detection
   framework = "Next.js - SSG"
   
+  # Create a dedicated service role for Amplify
+  create_service_role = true
+
   tags = local.common_tags
 }
 

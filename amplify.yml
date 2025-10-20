@@ -19,7 +19,7 @@ applications:
             - npm run build
             - echo "✅ Build complete"
       artifacts:
-        baseDirectory: frontend/.next
+        baseDirectory: .next
         files:
           - '**/*'
       cache:
