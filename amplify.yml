@@ -11,20 +11,26 @@ applications:
             # Define helper to get SSM parameters
             - |
               get_ssm_param() {
-                echo "🔍 Fetching SSM parameter: $1"
-                aws ssm get-parameter \
-                  --name "$1" \
+                local param_name="$1"
+                local value=$(aws ssm get-parameter \
+                  --name "$param_name" \
                   --with-decryption \
-                  --region s-east-1 \
+                  --region us-east-1 \
                   --query "Parameter.Value" \
-                  --output text 2>&1 || echo ""
+                  --output text 2>/dev/null)
+                
+                if [ $? -eq 0 ] && [ -n "$value" ]; then
+                  echo "$value"
+                else
+                  echo ""
+                fi
               }
 
               # Base prefix for parameters
               SSM_PREFIX="/monetizespirit/mrwhite/prod"
 
               echo "📥 Loading environment variables from SSM..."
-              echo "🌍 AWS Region: s-east-1"
+              echo "🌍 AWS Region: us-east-1"
               echo "📂 SSM Prefix: $SSM_PREFIX"
 
               export NEXT_PUBLIC_API_BASE_URL=$(get_ssm_param "$SSM_PREFIX/api_base_url")
