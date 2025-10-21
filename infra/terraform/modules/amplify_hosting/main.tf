@@ -208,3 +208,44 @@ resource "aws_iam_role_policy_attachment" "amplify_service" {
   role       = aws_iam_role.amplify_service[0].name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
 }
+
+# === IAM Policy for SSM Parameter Store Access ===
+resource "aws_iam_policy" "amplify_ssm_access" {
+  count = var.create_service_role ? 1 : 0
+
+  name        = "${local.name_prefix}-amplify-ssm-access"
+  description = "Allow Amplify to read SSM parameters for environment configuration"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:*:parameter/${var.ssm_parameter_prefix}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:DescribeParameters"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "amplify_ssm_access" {
+  count = var.create_service_role ? 1 : 0
+
+  role       = aws_iam_role.amplify_service[0].name
+  policy_arn = aws_iam_policy.amplify_ssm_access[0].arn
+}

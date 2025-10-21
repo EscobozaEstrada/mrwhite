@@ -96,6 +96,16 @@ output "app_runner_access_role_arn" {
   value       = module.iam_roles.app_runner_access_role_arn
 }
 
+output "amplify_service_role_arn" {
+  description = "ARN of the Amplify service role with SSM access"
+  value       = module.amplify_hosting.amplify_service_role_arn
+}
+
+output "amplify_ssm_policy_arn" {
+  description = "ARN of the Amplify SSM access policy"
+  value       = module.amplify_hosting.amplify_ssm_policy_arn
+}
+
 # === Secrets Management ===
 # All secrets are stored in SSM Parameter Store and managed outside Terraform
 # Path: /monetizespirit/mrwhite/{environment}/*

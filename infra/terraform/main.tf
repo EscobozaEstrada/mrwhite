@@ -349,6 +349,9 @@ module "amplify_hosting" {
   
   # Create a dedicated service role for Amplify
   create_service_role = true
+  
+  # SSM Parameter Store access for environment variables
+  ssm_parameter_prefix = "${var.organization}/${var.project_name}/${var.environment}"
 
   tags = local.common_tags
 }

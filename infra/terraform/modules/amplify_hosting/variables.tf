@@ -308,6 +308,12 @@ variable "create_service_role" {
   default     = false
 }
 
+variable "ssm_parameter_prefix" {
+  description = "Prefix for SSM parameters that Amplify needs to access (e.g., 'monetizespirit/mrwhite/prod')"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

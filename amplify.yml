@@ -11,14 +11,21 @@ applications:
             # Define helper to get SSM parameters
             - |
               get_ssm_param() {
-                aws ssm get-parameter --name "$1" --with-decryption \
-                  --query "Parameter.Value" --output text 2>/dev/null || echo ""
+                echo "🔍 Fetching SSM parameter: $1"
+                aws ssm get-parameter \
+                  --name "$1" \
+                  --with-decryption \
+                  --region s-east-1 \
+                  --query "Parameter.Value" \
+                  --output text 2>&1 || echo ""
               }
 
               # Base prefix for parameters
               SSM_PREFIX="/monetizespirit/mrwhite/prod"
 
               echo "📥 Loading environment variables from SSM..."
+              echo "🌍 AWS Region: s-east-1"
+              echo "📂 SSM Prefix: $SSM_PREFIX"
 
               export NEXT_PUBLIC_API_BASE_URL=$(get_ssm_param "$SSM_PREFIX/api_base_url")
               export NEXT_PUBLIC_API_VERSION=$(get_ssm_param "$SSM_PREFIX/api_version")
@@ -76,10 +83,72 @@ applications:
               export NEXT_PUBLIC_ELEVEN_LABS_API_KEY=$(get_ssm_param "$SSM_PREFIX/eleven_labs_api_key")
               export NEXT_PUBLIC_MR_WHITE_VOICE_ID=$(get_ssm_param "$SSM_PREFIX/mr_white_voice_id")
 
+              echo ""
               echo "✅ Environment variables loaded from SSM"
+              echo ""
               echo "🔍 Verifying critical variables..."
-              [ -z "$NEXT_PUBLIC_FIREBASE_API_KEY" ] && echo "⚠️  Missing FIREBASE_API_KEY" || echo "✅ Firebase configured"
-              [ -z "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY" ] && echo "⚠️  Missing STRIPE_PUBLIC_KEY" || echo "✅ Stripe configured"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              
+              # Debug output (showing first 10 chars for security)
+              echo "📊 Debug Values:"
+              echo "  STRIPE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLIC_KEY:0:10}..."
+              echo "  FIREBASE_API_KEY: ${NEXT_PUBLIC_FIREBASE_API_KEY:0:10}..."
+              echo "  API_BASE_URL: $NEXT_PUBLIC_API_BASE_URL"
+              echo "  FASTAPI_BASE_URL: $NEXT_PUBLIC_FASTAPI_BASE_URL"
+              echo ""
+              
+              # Validation checks
+              MISSING_VARS=0
+              
+              if [ -z "$NEXT_PUBLIC_FIREBASE_API_KEY" ]; then
+                echo "❌ CRITICAL: Missing FIREBASE_API_KEY"
+                MISSING_VARS=$((MISSING_VARS + 1))
+              else
+                echo "✅ Firebase configured"
+              fi
+              
+              if [ -z "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY" ]; then
+                echo "❌ CRITICAL: Missing STRIPE_PUBLIC_KEY"
+                MISSING_VARS=$((MISSING_VARS + 1))
+              else
+                echo "✅ Stripe configured"
+              fi
+              
+              if [ -z "$NEXT_PUBLIC_API_BASE_URL" ]; then
+                echo "❌ CRITICAL: Missing API_BASE_URL"
+                MISSING_VARS=$((MISSING_VARS + 1))
+              else
+                echo "✅ API URL configured"
+              fi
+              
+              if [ -z "$NEXT_PUBLIC_FASTAPI_BASE_URL" ]; then
+                echo "❌ CRITICAL: Missing FASTAPI_BASE_URL"
+                MISSING_VARS=$((MISSING_VARS + 1))
+              else
+                echo "✅ FastAPI URL configured"
+              fi
+              
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              
+              if [ $MISSING_VARS -gt 0 ]; then
+                echo ""
+                echo "❌ Build failed: $MISSING_VARS critical environment variable(s) missing"
+                echo ""
+                echo "🔧 Troubleshooting steps:"
+                echo "  1. Verify SSM parameters exist in us-west-2:"
+                echo "     aws ssm get-parameter --name '$SSM_PREFIX/stripe_public_key' --region us-west-2"
+                echo ""
+                echo "  2. Check Amplify IAM role has these permissions:"
+                echo "     - ssm:GetParameter"
+                echo "     - ssm:GetParametersByPath"
+                echo "     Resource: arn:aws:ssm:us-west-2:*:parameter/monetizespirit/mrwhite/prod/*"
+                echo ""
+                echo "  3. Verify parameter names match exactly (case-sensitive)"
+                echo ""
+                exit 1
+              fi
+              
+              echo "✅ All critical environment variables validated"
 
             - echo "📦 Installing dependencies..."
             - npm ci
