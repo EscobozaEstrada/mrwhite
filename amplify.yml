@@ -166,7 +166,7 @@ applications:
             - echo "✅ Build complete"
 
       artifacts:
-        baseDirectory: .next
+        baseDirectory: out
         files:
           - '**/*'
 
