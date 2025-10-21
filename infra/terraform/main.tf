@@ -347,8 +347,8 @@ module "amplify_hosting" {
   # Monorepo configuration - only build when frontend/ directory changes
   app_root_path = "frontend"
   
-  # Framework detection
-  framework = "Next.js - SSG"
+  # Framework detection - SSR for WEB_COMPUTE platform
+  framework = "Next.js - SSR"
   
   # Create a dedicated service role for Amplify
   create_service_role = true
