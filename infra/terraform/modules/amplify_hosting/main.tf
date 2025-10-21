@@ -9,7 +9,7 @@ locals {
 resource "aws_amplify_app" "main" {
   name       = var.app_name
   repository = var.repository_url
-  platform   = var.platform
+  platform   = var.platform  # WEB_COMPUTE for SSR support
   iam_service_role_arn = var.create_service_role ? aws_iam_role.amplify_service[0].arn : null
 
   # Environment variables for build

@@ -327,6 +327,9 @@ module "amplify_hosting" {
   branch_name    = var.frontend_branch
   github_access_token = data.aws_ssm_parameter.github_token.value
   
+  # Use WEB_COMPUTE platform for SSR and dynamic routes support
+  platform = "WEB_COMPUTE"
+  
   # Domain configuration is handled manually in the AWS console
   
   # Build configuration

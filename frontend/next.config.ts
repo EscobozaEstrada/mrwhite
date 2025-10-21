@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export', // Enable static export for Amplify Hosting
+  // Removed output: 'export' to support dynamic routes with Amplify WEB_COMPUTE
   env: {
     JWT_SECRET: process.env.JWT_SECRET,
     NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
