@@ -220,10 +220,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         os.getenv("FRONTEND_URL", "http://34.228.255.83:3000"),
-        "http://34.228.255.83:3000",  # Explicit frontend URL
+        "https://app.mrwhiteaidogbuddy.com",  # New production domain
+        "https://mrwhiteaidogbuddy.com",      # Original domain
+        "http://34.228.255.83:3000",          # Explicit frontend URL
         "http://34.228.255.83:3005",
         "https://mr-white-project.vercel.app",
-        "http://127.0.0.1:3000",  # Alternative 34.228.255.83 format
+        "http://127.0.0.1:3000",              # Alternative 34.228.255.83 format
+        "http://localhost:3000",              # Local development
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],

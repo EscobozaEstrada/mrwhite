@@ -48,6 +48,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         os.getenv("FRONTEND_URL"),
+        "https://app.mrwhiteaidogbuddy.com",  # New production domain
+        "https://mrwhiteaidogbuddy.com",      # Original domain
+        "http://localhost:3000",              # Local development
     ],
     allow_credentials=True,
     allow_methods=["*"],
