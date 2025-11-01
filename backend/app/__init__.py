@@ -226,24 +226,21 @@ def create_app(config_name=None):
         app.logger.error(f"❌ Blueprint registration failed: {str(e)}")
         raise
     
-    # Temporarily disable scheduler to debug Cloud Run startup issues
-    app.logger.info("⏸️ Scheduler temporarily disabled for debugging")
-    
-    # Initialize precision reminder scheduler with app context (DISABLED)
-    # try:
-    #     from .services.precision_reminder_scheduler import start_precision_scheduler
-    #     start_precision_scheduler(app)
-    #     app.logger.info("✅ Precision reminder scheduler initialized successfully")
-    # except Exception as e:
-    #     app.logger.error(f"❌ Failed to initialize precision reminder scheduler: {str(e)}")
-    #     
-    #     # Fallback to old scheduler if precision scheduler fails
-    #     try:
-    #         from .services.reminder_scheduler_service import start_reminder_scheduler
-    #         start_reminder_scheduler(app)
-    #         app.logger.info("✅ Fallback reminder scheduler initialized successfully")
-    #     except Exception as fallback_error:
-    #         app.logger.error(f"❌ Failed to initialize fallback reminder scheduler: {str(fallback_error)}")
+    # Initialize precision reminder scheduler with app context
+    try:
+        from .services.precision_reminder_scheduler import start_precision_scheduler
+        start_precision_scheduler(app)
+        app.logger.info("✅ Precision reminder scheduler initialized successfully")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to initialize precision reminder scheduler: {str(e)}")
+        
+        # Fallback to old scheduler if precision scheduler fails
+        try:
+            from .services.reminder_scheduler_service import start_reminder_scheduler
+            start_reminder_scheduler(app)
+            app.logger.info("✅ Fallback reminder scheduler initialized successfully")
+        except Exception as fallback_error:
+            app.logger.error(f"❌ Failed to initialize fallback reminder scheduler: {str(fallback_error)}")
     
     # Add a generic OPTIONS route handler
     @app.route('/api/<path:path>', methods=['OPTIONS'])

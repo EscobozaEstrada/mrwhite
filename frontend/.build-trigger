@@ -1,1 +1,1 @@
-# Build trigger - Force rebuild with correct us-east-1 region fix
+# Build trigger - Update SSM api_base_url parameter
