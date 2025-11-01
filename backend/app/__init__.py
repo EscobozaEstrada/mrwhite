@@ -20,11 +20,17 @@ jwt = JWTManager()
 
 def create_app(config_name=None):
     """Application factory pattern with SSM support"""
+    print("🚀 [STARTUP] Creating Flask app...")
     app = Flask(__name__)
+    
+    # Configure logging early
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [STARTUP] %(levelname)s: %(message)s')
+    app.logger.info("🏁 Flask app creation started")
     
     # Determine if we should use SSM configuration
     use_ssm_config = os.getenv('USE_SSM_CONFIG', 'False').lower() in ('true', '1', 'yes')
     environment = os.getenv('ENVIRONMENT', 'dev')
+    app.logger.info(f"🔧 Environment: {environment}, SSM Config: {use_ssm_config}")
     
     if use_ssm_config:
         # Use SSM-aware configuration
@@ -142,14 +148,28 @@ def create_app(config_name=None):
             app.config['FLASK_DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     
     # Initialize extensions with app
-    db.init_app(app)
-    bcrypt.init_app(app)
-    jwt.init_app(app)
+    app.logger.info("📦 Initializing Flask extensions...")
+    try:
+        db.init_app(app)
+        app.logger.info("✅ Database initialized")
+        bcrypt.init_app(app)
+        app.logger.info("✅ Bcrypt initialized") 
+        jwt.init_app(app)
+        app.logger.info("✅ JWT initialized")
+    except Exception as e:
+        app.logger.error(f"❌ Extension initialization failed: {str(e)}")
+        raise
     CORS(app, 
         supports_credentials=True,
         resources={
             r"/api/*": {
-                "origins": [app.config['FRONTEND_URL'], "http://localhost:3000", "http://localhost:3005"],
+                "origins": [
+                    app.config['FRONTEND_URL'], 
+                    "https://app.mrwhiteaidogbuddy.com",  # New production domain
+                    "https://mrwhiteaidogbuddy.com",      # Original domain
+                    "http://localhost:3000", 
+                    "http://localhost:3005"
+                ],
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                 "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
                 "expose_headers": ["Content-Range", "X-Content-Range"],
@@ -169,46 +189,61 @@ def create_app(config_name=None):
         app.logger.info("📝 Configuration loaded from environment variables")
     
     # Register blueprints
-    from .routes import auth_bp, chatbot_bp, conversation_bp, contact_bp, care_archive_bp, payment_bp
-    from .routes.subscription import subscription_bp
-    from .routes.usage import usage_bp
-    from .routes.health_intelligence_routes import health_intelligence_bp
-    from .routes.health_routes import health_bp
-    from .routes.credit_system import credit_system_bp
-    from .routes.enhanced_reminder_routes import enhanced_reminder_bp
-    from .routes.timezone_routes import timezone_bp
-    from .routes.gallery import gallery_bp
-    
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
-    app.register_blueprint(chatbot_bp, url_prefix='/api')
-    app.register_blueprint(conversation_bp, url_prefix='/api')
-    app.register_blueprint(contact_bp, url_prefix='/api/contact')
-    app.register_blueprint(care_archive_bp, url_prefix='/api/care-archive')
-    app.register_blueprint(payment_bp, url_prefix='/api/payment')
-    app.register_blueprint(subscription_bp, url_prefix='/api/subscription')
-    app.register_blueprint(usage_bp, url_prefix='/api/usage')
-    app.register_blueprint(health_intelligence_bp)  # Already has /api/health-intelligence prefix
-    app.register_blueprint(health_bp)  # Already has /api/health prefix
-    app.register_blueprint(credit_system_bp, url_prefix='/api/credit-system')
-    app.register_blueprint(enhanced_reminder_bp)  # Already has /api/reminders prefix
-    app.register_blueprint(timezone_bp, url_prefix='/api/timezone')
-    app.register_blueprint(gallery_bp)  # Already has /api/gallery prefix
-    
-    # Initialize precision reminder scheduler with app context
+    app.logger.info("📋 Registering blueprints...")
     try:
-        from .services.precision_reminder_scheduler import start_precision_scheduler
-        start_precision_scheduler(app)
-        app.logger.info("✅ Precision reminder scheduler initialized successfully")
+        from .routes import auth_bp, chatbot_bp, conversation_bp, contact_bp, care_archive_bp, payment_bp
+        app.logger.info("✅ Core routes imported")
+        from .routes.subscription import subscription_bp
+        from .routes.usage import usage_bp
+        from .routes.health_intelligence_routes import health_intelligence_bp
+        from .routes.health_routes import health_bp
+        from .routes.credit_system import credit_system_bp
+        from .routes.enhanced_reminder_routes import enhanced_reminder_bp
+        from .routes.timezone_routes import timezone_bp
+        from .routes.gallery import gallery_bp
+        app.logger.info("✅ All routes imported successfully")
     except Exception as e:
-        app.logger.error(f"❌ Failed to initialize precision reminder scheduler: {str(e)}")
-        
-        # Fallback to old scheduler if precision scheduler fails
-        try:
-            from .services.reminder_scheduler_service import start_reminder_scheduler
-            start_reminder_scheduler(app)
-            app.logger.info("✅ Fallback reminder scheduler initialized successfully")
-        except Exception as fallback_error:
-            app.logger.error(f"❌ Failed to initialize fallback reminder scheduler: {str(fallback_error)}")
+        app.logger.error(f"❌ Blueprint import failed: {str(e)}")
+        raise
+    
+    try:
+        app.register_blueprint(auth_bp, url_prefix='/api/auth')
+        app.register_blueprint(chatbot_bp, url_prefix='/api')
+        app.register_blueprint(conversation_bp, url_prefix='/api')
+        app.register_blueprint(contact_bp, url_prefix='/api/contact')
+        app.register_blueprint(care_archive_bp, url_prefix='/api/care-archive')
+        app.register_blueprint(payment_bp, url_prefix='/api/payment')
+        app.register_blueprint(subscription_bp, url_prefix='/api/subscription')
+        app.register_blueprint(usage_bp, url_prefix='/api/usage')
+        app.register_blueprint(health_intelligence_bp)  # Already has /api/health-intelligence prefix
+        app.register_blueprint(health_bp)  # Already has /api/health prefix
+        app.register_blueprint(credit_system_bp, url_prefix='/api/credit-system')
+        app.register_blueprint(enhanced_reminder_bp)  # Already has /api/reminders prefix
+        app.register_blueprint(timezone_bp, url_prefix='/api/timezone')
+        app.register_blueprint(gallery_bp)  # Already has /api/gallery prefix
+        app.logger.info("✅ All blueprints registered successfully")
+    except Exception as e:
+        app.logger.error(f"❌ Blueprint registration failed: {str(e)}")
+        raise
+    
+    # Temporarily disable scheduler to debug Cloud Run startup issues
+    app.logger.info("⏸️ Scheduler temporarily disabled for debugging")
+    
+    # Initialize precision reminder scheduler with app context (DISABLED)
+    # try:
+    #     from .services.precision_reminder_scheduler import start_precision_scheduler
+    #     start_precision_scheduler(app)
+    #     app.logger.info("✅ Precision reminder scheduler initialized successfully")
+    # except Exception as e:
+    #     app.logger.error(f"❌ Failed to initialize precision reminder scheduler: {str(e)}")
+    #     
+    #     # Fallback to old scheduler if precision scheduler fails
+    #     try:
+    #         from .services.reminder_scheduler_service import start_reminder_scheduler
+    #         start_reminder_scheduler(app)
+    #         app.logger.info("✅ Fallback reminder scheduler initialized successfully")
+    #     except Exception as fallback_error:
+    #         app.logger.error(f"❌ Failed to initialize fallback reminder scheduler: {str(fallback_error)}")
     
     # Add a generic OPTIONS route handler
     @app.route('/api/<path:path>', methods=['OPTIONS'])
@@ -262,4 +297,6 @@ def create_app(config_name=None):
         """Health check endpoint for App Runner"""
         return {'status': 'healthy', 'config_source': 'ssm' if use_ssm_config else 'env'}, 200
 
+    app.logger.info("🎉 Flask app creation completed successfully!")
+    print("🎉 [STARTUP] Flask app ready!")
     return app
