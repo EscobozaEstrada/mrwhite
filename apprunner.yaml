@@ -18,7 +18,7 @@ run:
     - pip3 install -r backend/requirements.txt
   
   # Start all services using our startup script
-  command: bash backend/start-services.sh
+  command: cd backend && bash start-services.sh
   
   # Network configuration (App Runner standard port)
   network:
