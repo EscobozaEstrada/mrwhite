@@ -1,16 +1,14 @@
 version: 1.0
-# runtime: python311 # We are switching to a Dockerfile deployment
+runtime: docker
 
 build:
-  image: python:3.11-slim # Specify the base image for the build environment
   commands:
     build:
-      - echo "Building Docker image..."
-      - docker build -t mrwhite-backend .
+      - echo "🏗️  Building Flask backend with Docker..."
 
 run:
-  command: gunicorn --bind 0.0.0.0:5001 wsgi:application
+  command: gunicorn --bind 0.0.0.0:8080 wsgi:application
   network:
-    port: 5001
+    port: 8080
   
   # Environment variables are now passed directly from Terraform to the container
