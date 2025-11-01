@@ -2,6 +2,7 @@
 # Startup script for App Runner - runs all services on different ports
 
 echo "🚀 Starting Mr. White Backend Services..."
+echo "Combining services"
 echo "📍 Current directory: $(pwd)"
 echo "📍 Directory contents: $(ls -la)"
 
