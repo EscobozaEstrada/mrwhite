@@ -1,18 +1,47 @@
 version: 1.0
 runtime: python311
 
+# Monorepo configuration - only watch backend/ directory
+# App Runner will only redeploy when files in backend/ change
 build:
   commands:
-    build:
-      - echo "🏗️  Installing system dependencies..."
-      - apt-get update && apt-get install -y build-essential libpq-dev curl wkhtmltopdf
-      - echo "📦 Installing Python dependencies..."
-      - pip install --upgrade pip
-      - pip install -r requirements.txt
+    pre-build:
+      # No dependency installation here for Python 3.11 revised build
+      - echo "Skipping pip install in build phase (Python 3.11 revised build)."
 
 run:
-  command: gunicorn --bind 0.0.0.0:8080 wsgi:application
-  network:
-    port: 8080
+  # Runtime configuration
+  runtime-version: 3.11
+  pre-run:
+    - echo "📦 Installing Python dependencies at runtime (Python 3.11 revised build)..."
+    - pip3 install --upgrade pip
+    - pip3 install -r backend/requirements.txt
   
-  # Environment variables are now passed directly from Terraform to the container
+  # Start the application from the backend directory
+  command: python3 -m gunicorn --chdir backend --bind 0.0.0.0:5001 --workers 4 --timeout 30 --preload wsgi:application
+  
+  # Network configuration
+  network:
+    port: 5001
+  
+  # Environment variables from SSM Parameter Store
+  # These are referenced but actual values come from SSM via Terraform
+  env:
+    # Environment detection
+    - name: ENVIRONMENT
+      value: "prod"
+
+    # Use SSM Parameter Store for configuration
+    - name: USE_SSM_CONFIG
+      value: "True"
+
+    # AWS Region for SSM and other AWS services
+    - name: AWS_REGION
+      value: "us-east-1"
+
+    # Organization and project settings
+    - name: ORGANIZATION
+      value: "monetizespirit"
+
+    - name: PROJECT_NAME
+      value: "mrwhite"
