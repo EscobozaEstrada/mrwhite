@@ -19,8 +19,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Make startup script executable
+RUN chmod +x /app/start-services.sh
+
 # Expose the port the app runs on (App Runner expects 8080)
 EXPOSE 8080
 
-# Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "wsgi:app"] 
+# Command to run all services
+CMD ["/app/start-services.sh"] 

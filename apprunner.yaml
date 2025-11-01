@@ -17,12 +17,12 @@ run:
     - pip3 install --upgrade pip
     - pip3 install -r backend/requirements.txt
   
-  # Start the application from the backend directory
-  command: python3 -m gunicorn --chdir backend --bind 0.0.0.0:5001 --workers 4 --timeout 30 --preload wsgi:application
+  # Start all services using our startup script
+  command: bash backend/start-services.sh
   
-  # Network configuration
+  # Network configuration (App Runner standard port)
   network:
-    port: 5001
+    port: 8080
   
   # Environment variables from SSM Parameter Store
   # These are referenced but actual values come from SSM via Terraform

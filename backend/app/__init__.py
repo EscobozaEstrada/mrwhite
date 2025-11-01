@@ -201,6 +201,7 @@ def create_app(config_name=None):
         from .routes.enhanced_reminder_routes import enhanced_reminder_bp
         from .routes.timezone_routes import timezone_bp
         from .routes.gallery import gallery_bp
+        from .routes.fastapi_proxy import fastapi_proxy_bp
         app.logger.info("✅ All routes imported successfully")
     except Exception as e:
         app.logger.error(f"❌ Blueprint import failed: {str(e)}")
@@ -221,6 +222,7 @@ def create_app(config_name=None):
         app.register_blueprint(enhanced_reminder_bp)  # Already has /api/reminders prefix
         app.register_blueprint(timezone_bp, url_prefix='/api/timezone')
         app.register_blueprint(gallery_bp)  # Already has /api/gallery prefix
+        app.register_blueprint(fastapi_proxy_bp)  # Proxy for FastAPI services
         app.logger.info("✅ All blueprints registered successfully")
     except Exception as e:
         app.logger.error(f"❌ Blueprint registration failed: {str(e)}")
