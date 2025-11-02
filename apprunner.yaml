@@ -17,8 +17,8 @@ run:
     - pip3 install --upgrade pip
     - pip3 install -r backend/requirements.txt
   
-  # Start all services using our startup script
-  command: cd backend && bash start-services.sh
+  # Start Flask only to isolate startup issues  
+  command: cd backend && bash start-flask-only.sh
   
   # Network configuration (App Runner standard port)
   network:
